@@ -36,6 +36,9 @@ export interface DevSettings {
   gravityScale: number;
   timeScale: number;
   freezeTime: boolean;
+  infiniteDurability: boolean;
+  showChunkBorders: boolean;
+  debugInfo: boolean;
 }
 
 export enum BlockType {

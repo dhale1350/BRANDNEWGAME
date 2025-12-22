@@ -265,7 +265,10 @@ export const Game: React.FC<GameProps> = ({
     showHitboxes: false,
     gravityScale: 1.0, 
     timeScale: 1.0, 
-    freezeTime: false
+    freezeTime: false,
+    infiniteDurability: false,
+    showChunkBorders: false,
+    debugInfo: false,
   });
   
   // MAP STATE
@@ -285,7 +288,16 @@ export const Game: React.FC<GameProps> = ({
   useEffect(() => { devSettingsRef.current = devSettings; }, [devSettings]);
 
   const settingsRef = useRef<GameSettings>(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { 
+    settingsRef.current = settings; 
+    // Sync settings to player entity for immediate visual update
+    if (playerRef.current) {
+        playerRef.current.name = settings.playerName;
+        playerRef.current.color = settings.playerColor;
+        playerRef.current.hairColor = settings.playerHair;
+        playerRef.current.skinColor = settings.playerSkin;
+    }
+  }, [settings]);
 
   const worldRef = useRef<Uint8Array>(new Uint8Array(0));
   const wallsRef = useRef<Uint8Array>(new Uint8Array(0));
@@ -1197,7 +1209,7 @@ export const Game: React.FC<GameProps> = ({
                            addItemToInventory(drop);
                            
                            // Mining Durability Loss
-                           if (selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined) {
+                           if (selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined && !dev.infiniteDurability) {
                                // Clone item for immutability
                                const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
                                newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
@@ -1255,7 +1267,7 @@ export const Game: React.FC<GameProps> = ({
                               hasHit = true;
 
                               // Durability Loss on Hit
-                              if (!dev.godMode && selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined) {
+                              if (!dev.godMode && selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined && !dev.infiniteDurability) {
                                   // Clone item for immutability
                                   const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
                                   newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
@@ -1608,6 +1620,9 @@ export const Game: React.FC<GameProps> = ({
     const drawStartCY = camChunkY - drawPadding;
     const drawEndCY = camChunkY + viewportChunksH + drawPadding;
 
+    // --- DEBUG: CHUNK BORDERS ---
+    const showBorders = devSettingsRef.current.showChunkBorders;
+
     for (let cx = loadStartCX; cx <= loadEndCX; cx++) {
         for (let cy = loadStartCY; cy <= loadEndCY; cy++) {
              if (cx < 0 || cy < 0 || cx >= WORLD_WIDTH / CHUNK_SIZE || cy >= WORLD_HEIGHT / CHUNK_SIZE) continue;
@@ -1620,6 +1635,17 @@ export const Game: React.FC<GameProps> = ({
                  const entry = chunkCacheRef.current.get(key);
                  if (entry && !entry.isEmpty && entry.canvas) {
                      ctx.drawImage(entry.canvas, cx * CHUNK_SIZE * TILE_SIZE - camX, cy * CHUNK_SIZE * TILE_SIZE - camY);
+                 }
+                 
+                 // Debug: Draw Border
+                 if (showBorders) {
+                     ctx.strokeStyle = '#06b6d4'; // Cyan
+                     ctx.lineWidth = 1;
+                     ctx.strokeRect(cx * CHUNK_SIZE * TILE_SIZE - camX, cy * CHUNK_SIZE * TILE_SIZE - camY, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
+                     
+                     ctx.fillStyle = '#06b6d4';
+                     ctx.font = '8px monospace';
+                     ctx.fillText(`${cx},${cy}`, cx * CHUNK_SIZE * TILE_SIZE - camX + 2, cy * CHUNK_SIZE * TILE_SIZE - camY + 10);
                  }
              }
         }
@@ -2048,6 +2074,50 @@ export const Game: React.FC<GameProps> = ({
     npcsRef.current.forEach(drawP);
     enemiesRef.current.forEach(drawE); 
     drawP(playerRef.current);
+
+    // --- DEBUG: INFO OVERLAY ---
+    if (devSettingsRef.current.debugInfo) {
+        // Calculate grid pos under cursor
+        const { x, y } = inputRef.current.mouse;
+        const wx = Math.floor((x / zoom + camX) / TILE_SIZE);
+        const wy = Math.floor((y / zoom + camY) / TILE_SIZE);
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(x / zoom + 10, y / zoom + 10, 140, 65);
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x / zoom + 10, y / zoom + 10, 140, 65);
+
+        ctx.fillStyle = '#fff';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        
+        let blockName = 'VOID';
+        let lightVal = 0;
+        if (wx >= 0 && wx < WORLD_WIDTH && wy >= 0 && wy < WORLD_HEIGHT) {
+            const b = worldRef.current[wy * WORLD_WIDTH + wx];
+            const w = wallsRef.current[wy * WORLD_WIDTH + wx];
+            blockName = b !== BlockType.AIR ? BlockType[b] : (w !== WallType.AIR ? `WALL:${WallType[w]}` : 'AIR');
+            lightVal = lightRef.current[wy * WORLD_WIDTH + wx] || 0;
+        }
+
+        const lines = [
+            `X,Y: ${wx}, ${wy}`,
+            `TILE: ${blockName}`,
+            `LIGHT: ${(lightVal * 100).toFixed(0)}%`,
+            `CAM: ${camX}, ${camY}`,
+            `FPS: ${Math.round(1000/delta)}`
+        ];
+
+        lines.forEach((l, i) => {
+            ctx.fillText(l, x / zoom + 18, y / zoom + 25 + (i * 12));
+        });
+        
+        // Draw highlight
+        ctx.strokeStyle = '#ffff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(wx * TILE_SIZE - camX, wy * TILE_SIZE - camY, TILE_SIZE, TILE_SIZE);
+    }
     
     const remainingParticles: Particle[] = [];
     const maxParticles = settingsRef.current.performanceMode ? 50 : 250;
@@ -2361,25 +2431,9 @@ export const Game: React.FC<GameProps> = ({
             }
           }} 
           onGiveItem={(item) => addItemToInventory(item)} 
-          onTeleport={(loc) => { 
-             if (loc === 'surface') { 
-                playerRef.current.x = WORLD_WIDTH * TILE_SIZE / 2; 
-                playerRef.current.y = 5 * TILE_SIZE; 
-             } else if (loc === 'hell') { 
-                playerRef.current.y = (WORLD_HEIGHT - 20) * TILE_SIZE; 
-             } else if (loc === 'origin') {
-                 playerRef.current.x = TILE_SIZE * 10;
-                 playerRef.current.y = TILE_SIZE * 10;
-             } else if (loc.startsWith('player:')) {
-                 const targetId = loc.split(':')[1];
-                 const target = remotePlayersRef.current.get(targetId);
-                 if (target) {
-                     playerRef.current.x = target.x;
-                     playerRef.current.y = target.y;
-                     playerRef.current.vx = 0;
-                     playerRef.current.vy = 0;
-                 }
-             }
+          onTeleport={(x, y) => { 
+             playerRef.current.x = x;
+             playerRef.current.y = y;
              playerRef.current.vx = 0; 
              playerRef.current.vy = 0; 
           }} 
