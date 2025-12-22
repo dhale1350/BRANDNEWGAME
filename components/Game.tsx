@@ -734,6 +734,24 @@ export const Game: React.FC<GameProps> = ({
                 }
             }
 
+            // SAFETY: Calculate Spawn if Joining Player is at 0,0
+            if (playerRef.current.x === 0 && playerRef.current.y === 0 && worldRef.current.length > 0) {
+                const spawnX = WORLD_WIDTH / 2;
+                let spawnY = 0;
+                while (spawnY < WORLD_HEIGHT && worldRef.current[spawnY * WORLD_WIDTH + Math.floor(spawnX)] === BlockType.AIR) spawnY++;
+                playerRef.current.x = spawnX * TILE_SIZE;
+                playerRef.current.y = (spawnY - 5) * TILE_SIZE;
+                
+                // Also give starter items to joiners if empty
+                if (!inventoryRef.current[0]) {
+                    inventoryRef.current[0] = CREATE_ITEM.wood_pickaxe();
+                    inventoryRef.current[1] = CREATE_ITEM.wood_sword();
+                    inventoryRef.current[2] = CREATE_ITEM.block(BlockType.WOOD);
+                    inventoryRef.current[2]!.count = 5;
+                    setInventoryState([...inventoryRef.current]);
+                }
+            }
+
             updateLighting();
             
             // Spawn Guide NPC if none exists
