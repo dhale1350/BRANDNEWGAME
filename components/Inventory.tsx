@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { InventoryItem, ArmorType } from '../types';
 import { CRAFTING_RECIPES, CraftingRecipe } from '../constants';
-import { Box, X, Info, Zap, Hammer, Sword, Shield } from 'lucide-react';
+import { Box, X, Info, Zap, Hammer, Sword, Shield, Battery } from 'lucide-react';
 import { ItemIcon } from './ItemIcon';
 
 interface InventoryProps {
@@ -177,7 +177,7 @@ export const Inventory: React.FC<InventoryProps> = ({ isOpen, inventory, onSwap,
                     </div>
                     <div className="flex-1 space-y-1">
                         <h3 className="text-xl font-black text-white uppercase tracking-wide">{displayItem.name}</h3>
-                        <div className="flex items-center gap-4 text-[10px] font-bold uppercase text-zinc-500 tracking-wider">
+                        <div className="flex items-center gap-4 text-[10px] font-bold uppercase text-zinc-500 tracking-wider flex-wrap">
                             <span className="bg-white/5 px-2 py-1 rounded text-zinc-400">{displayItem.isBlock ? 'Construction Block' : displayItem.armorProps ? 'Armor' : 'Equipment'}</span>
                             {displayItem.toolProps && (
                                 <>
@@ -189,6 +189,11 @@ export const Inventory: React.FC<InventoryProps> = ({ isOpen, inventory, onSwap,
                                     )}
                                     {displayItem.toolProps.swingSpeed && (
                                         <span className="flex items-center gap-1 text-blue-400"><Zap size={12}/> {displayItem.toolProps.swingSpeed > 0.1 ? 'FAST' : 'NORMAL'}</span>
+                                    )}
+                                    {displayItem.toolProps.durability !== undefined && (
+                                        <span className={`flex items-center gap-1 ${displayItem.toolProps.durability < (displayItem.toolProps.maxDurability || 100) * 0.2 ? 'text-red-500 animate-pulse' : 'text-zinc-400'}`}>
+                                            <Battery size={12}/> {displayItem.toolProps.durability} / {displayItem.toolProps.maxDurability}
+                                        </span>
                                     )}
                                 </>
                             )}

@@ -93,6 +93,30 @@ export const ItemIcon = ({ item, size = 32 }: { item: InventoryItem, size?: numb
              
              ctx.restore();
         }
+
+        // Draw Durability Bar
+        if (item.toolProps && item.toolProps.durability !== undefined && item.toolProps.maxDurability) {
+            const current = item.toolProps.durability;
+            const max = item.toolProps.maxDurability;
+            const ratio = current / max;
+            
+            const barWidth = size * 0.8;
+            const barHeight = Math.max(2, size * 0.08);
+            const x = (size - barWidth) / 2;
+            const y = size - barHeight - 2;
+
+            // Background
+            ctx.fillStyle = '#333';
+            ctx.fillRect(x, y, barWidth, barHeight);
+
+            // Color based on durability
+            let color = '#4ade80'; // Green
+            if (ratio < 0.5) color = '#facc15'; // Yellow
+            if (ratio < 0.2) color = '#ef4444'; // Red
+
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, barWidth * ratio, barHeight);
+        }
     }, [item, size]);
 
     return <canvas ref={canvasRef} width={size} height={size} className="block drop-shadow-md" />;

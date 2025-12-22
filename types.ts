@@ -95,6 +95,8 @@ export interface ToolProps {
   swingSpeed?: number;
   attackRange?: number;
   scale?: number;
+  durability?: number;
+  maxDurability?: number;
 }
 
 export interface InventoryItem {

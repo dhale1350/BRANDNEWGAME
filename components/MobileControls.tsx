@@ -23,6 +23,19 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
   onToggleActionMode,
   onChatToggle,
 }) => {
+  // Callback refs to ensure event listeners always have latest closure
+  const onMoveRef = useRef(onMove);
+  const onAimRef = useRef(onAim);
+  const onJumpStartRef = useRef(onJumpStart);
+  const onJumpEndRef = useRef(onJumpEnd);
+
+  useEffect(() => {
+    onMoveRef.current = onMove;
+    onAimRef.current = onAim;
+    onJumpStartRef.current = onJumpStart;
+    onJumpEndRef.current = onJumpEnd;
+  });
+
   // LEFT STICK (Movement)
   const [leftActive, setLeftActive] = useState(false);
   const [leftPos, setLeftPos] = useState({ x: 0, y: 0 });
@@ -36,7 +49,7 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
   const rightId = useRef<number | null>(null);
   const rightVector = useRef({ x: 0, y: 0 });
 
-  // --- Left Stick Handlers ---
+  // --- Left Stick Logic ---
   const handleLeftStart = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -48,41 +61,55 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
     setLeftPos({ x: 0, y: 0 });
   };
 
-  const handleLeftMove = (e: PointerEvent) => {
-    if (!leftActive || e.pointerId !== leftId.current) return;
-    e.preventDefault();
-    const dx = e.clientX - leftBase.x;
-    const dy = e.clientY - leftBase.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 50;
-    
-    let lx = 0;
-    let ly = 0;
-    if (dist > 5) {
-      const angle = Math.atan2(dy, dx);
-      const clampDist = Math.min(dist, maxDist);
-      lx = Math.cos(angle) * clampDist;
-      ly = Math.sin(angle) * clampDist;
-      
-      const normX = lx / maxDist;
-      const normY = ly / maxDist;
-      onMove({ x: normX, y: normY });
-    } else {
-      onMove({ x: 0, y: 0 });
-    }
-    setLeftPos({ x: lx, y: ly });
-  };
+  useEffect(() => {
+    if (!leftActive) return;
 
-  const handleLeftEnd = (e: PointerEvent) => {
-    if (e.pointerId !== leftId.current) return;
-    e.preventDefault();
-    leftId.current = null;
-    setLeftActive(false);
-    setLeftPos({ x: 0, y: 0 });
-    onMove({ x: 0, y: 0 });
-  };
+    const handleLeftMove = (e: PointerEvent) => {
+        if (e.pointerId !== leftId.current) return;
+        e.preventDefault();
+        const dx = e.clientX - leftBase.x;
+        const dy = e.clientY - leftBase.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = 50;
+        
+        let lx = 0;
+        let ly = 0;
+        if (dist > 5) {
+          const angle = Math.atan2(dy, dx);
+          const clampDist = Math.min(dist, maxDist);
+          lx = Math.cos(angle) * clampDist;
+          ly = Math.sin(angle) * clampDist;
+          
+          const normX = lx / maxDist;
+          const normY = ly / maxDist;
+          onMoveRef.current({ x: normX, y: normY });
+        } else {
+          onMoveRef.current({ x: 0, y: 0 });
+        }
+        setLeftPos({ x: lx, y: ly });
+    };
 
-  // --- Right Stick Handlers ---
+    const handleLeftEnd = (e: PointerEvent) => {
+        if (e.pointerId !== leftId.current) return;
+        e.preventDefault();
+        leftId.current = null;
+        setLeftActive(false);
+        setLeftPos({ x: 0, y: 0 });
+        onMoveRef.current({ x: 0, y: 0 });
+    };
+
+    window.addEventListener('pointermove', handleLeftMove);
+    window.addEventListener('pointerup', handleLeftEnd);
+    window.addEventListener('pointercancel', handleLeftEnd);
+
+    return () => {
+        window.removeEventListener('pointermove', handleLeftMove);
+        window.removeEventListener('pointerup', handleLeftEnd);
+        window.removeEventListener('pointercancel', handleLeftEnd);
+    };
+  }, [leftActive, leftBase]);
+
+  // --- Right Stick Logic ---
   const handleRightStart = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -97,68 +124,54 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
     onAim({ x: 0, y: 0 }, true);
   };
 
-  const handleRightMove = (e: PointerEvent) => {
-    if (!rightActive || e.pointerId !== rightId.current) return;
-    e.preventDefault();
-    const dx = e.clientX - rightBase.x;
-    const dy = e.clientY - rightBase.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const maxDist = 50;
-
-    let rx = 0, ry = 0;
-    if (dist > 5) {
-       const angle = Math.atan2(dy, dx);
-       const clampDist = Math.min(dist, maxDist);
-       rx = Math.cos(angle) * clampDist;
-       ry = Math.sin(angle) * clampDist;
-       
-       rightVector.current = { x: rx / maxDist, y: ry / maxDist };
-       onAim(rightVector.current, true);
-    } else {
-       // Keep aiming but centered if dragging very close to center
-       rightVector.current = { x: 0, y: 0 };
-       onAim({ x: 0, y: 0 }, true);
-    }
-    setRightPos({ x: rx, y: ry });
-  };
-
-  const handleRightEnd = (e: PointerEvent) => {
-    if (e.pointerId !== rightId.current) return;
-    e.preventDefault();
-    rightId.current = null;
-    setRightActive(false);
-    setRightPos({ x: 0, y: 0 });
-    rightVector.current = { x: 0, y: 0 };
-    onAim({ x: 0, y: 0 }, false);
-  };
-
-  // Global listeners for sticks
   useEffect(() => {
-    if (leftActive) {
-        window.addEventListener('pointermove', handleLeftMove);
-        window.addEventListener('pointerup', handleLeftEnd);
-        window.addEventListener('pointercancel', handleLeftEnd);
-    }
-    return () => {
-        window.removeEventListener('pointermove', handleLeftMove);
-        window.removeEventListener('pointerup', handleLeftEnd);
-        window.removeEventListener('pointercancel', handleLeftEnd);
+    if (!rightActive) return;
+
+    const handleRightMove = (e: PointerEvent) => {
+        if (e.pointerId !== rightId.current) return;
+        e.preventDefault();
+        const dx = e.clientX - rightBase.x;
+        const dy = e.clientY - rightBase.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const maxDist = 50;
+
+        let rx = 0, ry = 0;
+        if (dist > 5) {
+           const angle = Math.atan2(dy, dx);
+           const clampDist = Math.min(dist, maxDist);
+           rx = Math.cos(angle) * clampDist;
+           ry = Math.sin(angle) * clampDist;
+           
+           rightVector.current = { x: rx / maxDist, y: ry / maxDist };
+           onAimRef.current(rightVector.current, true);
+        } else {
+           // Keep aiming but centered if dragging very close to center
+           rightVector.current = { x: 0, y: 0 };
+           onAimRef.current({ x: 0, y: 0 }, true);
+        }
+        setRightPos({ x: rx, y: ry });
     };
-  }, [leftActive, leftBase]);
 
-  useEffect(() => {
-    if (rightActive) {
-        window.addEventListener('pointermove', handleRightMove);
-        window.addEventListener('pointerup', handleRightEnd);
-        window.addEventListener('pointercancel', handleRightEnd);
-    }
+    const handleRightEnd = (e: PointerEvent) => {
+        if (e.pointerId !== rightId.current) return;
+        e.preventDefault();
+        rightId.current = null;
+        setRightActive(false);
+        setRightPos({ x: 0, y: 0 });
+        rightVector.current = { x: 0, y: 0 };
+        onAimRef.current({ x: 0, y: 0 }, false);
+    };
+
+    window.addEventListener('pointermove', handleRightMove);
+    window.addEventListener('pointerup', handleRightEnd);
+    window.addEventListener('pointercancel', handleRightEnd);
+
     return () => {
         window.removeEventListener('pointermove', handleRightMove);
         window.removeEventListener('pointerup', handleRightEnd);
         window.removeEventListener('pointercancel', handleRightEnd);
     };
   }, [rightActive, rightBase]);
-
 
   return (
     <div className="fixed inset-0 pointer-events-none z-40 select-none overflow-hidden touch-none" style={{ touchAction: 'none' }}>
@@ -240,9 +253,9 @@ export const MobileControls: React.FC<MobileControlsProps> = ({
       {/* JUMP BUTTON (Above Right Stick Area) */}
       <div className="absolute bottom-48 right-8 pointer-events-auto">
           <button 
-            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); (e.target as HTMLElement).setPointerCapture(e.pointerId); onJumpStart(); }}
-            onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); onJumpEnd(); }}
-            onPointerCancel={(e) => { e.stopPropagation(); e.preventDefault(); onJumpEnd(); }}
+            onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); (e.target as HTMLElement).setPointerCapture(e.pointerId); onJumpStartRef.current(); }}
+            onPointerUp={(e) => { e.stopPropagation(); e.preventDefault(); onJumpEndRef.current(); }}
+            onPointerCancel={(e) => { e.stopPropagation(); e.preventDefault(); onJumpEndRef.current(); }}
             className="w-16 h-16 rounded-full bg-white/10 border-2 border-white/20 flex items-center justify-center backdrop-blur-xl shadow-2xl active:scale-90 active:bg-white/20 transition-all mobile-control-zone touch-none"
           >
             <ArrowUp size={28} className="text-white" />

@@ -97,36 +97,36 @@ export const BLOCK_MINING_STATS: Record<BlockType, { hardness: number; requiredT
 export const CREATE_ITEM = {
   wood_pickaxe: (): InventoryItem => ({
     id: 'wood_pickaxe', name: 'Wood Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 0.45, tier: 0, swingSpeed: 0.06 }
+    toolProps: { type: ToolType.PICKAXE, efficiency: 0.45, tier: 0, swingSpeed: 0.06, durability: 60, maxDurability: 60 }
   }),
   wood_sword: (): InventoryItem => ({
     id: 'wood_sword', name: 'Wood Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 0, damage: 15, knockback: 6,
-      swingSpeed: 0.08, attackRange: 55, scale: 1.4
+      swingSpeed: 0.08, attackRange: 55, scale: 1.4, durability: 60, maxDurability: 60
     }
   }),
   iron_sword: (): InventoryItem => ({
     id: 'iron_sword', name: 'Iron Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 2, damage: 32, knockback: 8,
-      swingSpeed: 0.12, attackRange: 75, scale: 1.6
+      swingSpeed: 0.12, attackRange: 75, scale: 1.6, durability: 250, maxDurability: 250
     }
   }),
   diamond_sword: (): InventoryItem => ({
     id: 'diamond_sword', name: 'Diamond Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 4, damage: 65, knockback: 10,
-      swingSpeed: 0.18, attackRange: 90, scale: 1.9
+      swingSpeed: 0.18, attackRange: 90, scale: 1.9, durability: 1000, maxDurability: 1000
     }
   }),
   iron_pickaxe: (): InventoryItem => ({
     id: 'iron_pickaxe', name: 'Iron Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 1.25, tier: 2, swingSpeed: 0.10 }
+    toolProps: { type: ToolType.PICKAXE, efficiency: 1.25, tier: 2, swingSpeed: 0.10, durability: 250, maxDurability: 250 }
   }),
   diamond_pickaxe: (): InventoryItem => ({
     id: 'diamond_pickaxe', name: 'Diamond Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 3.5, tier: 4, swingSpeed: 0.16 }
+    toolProps: { type: ToolType.PICKAXE, efficiency: 3.5, tier: 4, swingSpeed: 0.16, durability: 1000, maxDurability: 1000 }
   }),
   // ARMOR
   iron_helmet: (): InventoryItem => ({

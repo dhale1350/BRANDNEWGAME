@@ -341,6 +341,7 @@ export const Game: React.FC<GameProps> = ({
   });
   
   const mobileAimRef = useRef({ x: 0, y: 0, active: false });
+  const targetReticleRef = useRef<{x: number, y: number, valid: boolean}>({x: 0, y: 0, valid: false});
 
   // Inventory now 33 slots (0-29 main, 30 helmet, 31 chest, 32 legs)
   const inventoryRef = useRef<(InventoryItem | null)[]>(new Array(33).fill(null));
@@ -1062,12 +1063,37 @@ export const Game: React.FC<GameProps> = ({
 
       let tx = 0, ty = 0;
       let isPressed = false;
+      const reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
 
       if (effectiveIsMobile) {
           if (mobileAimRef.current.active) {
+              const v = mobileAimRef.current;
+              // Clamp joystick aim to reach to avoid invalidating action
+              let offX = v.x * 300;
+              let offY = v.y * 300;
+              const rawDist = Math.sqrt(offX*offX + offY*offY);
+              
+              if (rawDist > reach) {
+                  const ratio = reach / rawDist;
+                  offX *= ratio;
+                  offY *= ratio;
+              }
+              
+              const aimX = (p.x + p.width / 2) + offX;
+              const aimY = (p.y + p.height / 2) + offY;
+              
+              tx = Math.floor(aimX / TILE_SIZE);
+              ty = Math.floor(aimY / TILE_SIZE);
+              isPressed = true;
+              targetReticleRef.current = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, valid: true };
+          } else if (input.mouse.leftDown) {
+              // Direct touch fallback
               tx = Math.floor((input.mouse.x / zoom + cam.x) / TILE_SIZE);
               ty = Math.floor((input.mouse.y / zoom + cam.y) / TILE_SIZE);
               isPressed = true;
+              targetReticleRef.current = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, valid: true };
+          } else {
+              targetReticleRef.current.valid = false;
           }
       } else if (input.isGamepadActive) {
           const gp = navigator.getGamepads()[0];
@@ -1087,8 +1113,7 @@ export const Game: React.FC<GameProps> = ({
       }
 
       const dist = Math.sqrt(Math.pow((tx * TILE_SIZE + TILE_SIZE/2) - (p.x + p.width/2), 2) + Math.pow((ty * TILE_SIZE + TILE_SIZE/2) - (p.y + p.height/2), 2));
-      const reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
-
+      
       if (dist > reach && !dev.infiniteReach) isPressed = false;
 
       if (isPressed) {
@@ -1152,6 +1177,22 @@ export const Game: React.FC<GameProps> = ({
                        if (!dev.godMode) {
                            const drop = CREATE_ITEM.block(block);
                            addItemToInventory(drop);
+                           
+                           // Mining Durability Loss
+                           if (selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined) {
+                               // Clone item for immutability
+                               const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
+                               newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
+                               
+                               if (newItem.toolProps.durability <= 0) {
+                                   inv[selectedSlotRef.current] = null;
+                                   sfx.playBlip(100, 0.2, 'sawtooth', settingsRef.current.audioVolume);
+                                   spawnParticles(p.x, p.y - 10, '#ffffff', 10); // Break effect
+                               } else {
+                                   inv[selectedSlotRef.current] = newItem;
+                               }
+                               setInventoryState([...inv]);
+                           }
                        }
                        world[ty * WORLD_WIDTH + tx] = BlockType.AIR;
                        broadcast('WORLD_CHANGE', { x: tx, y: ty, blockType: BlockType.AIR });
@@ -1160,14 +1201,68 @@ export const Game: React.FC<GameProps> = ({
                        miningRef.current.progress = 0;
                    }
               } else {
+                  // SWING ATTACK (Hitting Air)
                   miningRef.current.swing = (Math.sin(now / 50) + 1) / 2;
                   miningRef.current.x = -1;
+                  
+                  // Attack Hit Logic
+                  if (miningRef.current.attackCooldown <= 0) {
+                      let hasHit = false;
+                      // Simple melee hit detection box based on cursor/aim
+                      const hitX = tx * TILE_SIZE + TILE_SIZE/2;
+                      const hitY = ty * TILE_SIZE + TILE_SIZE/2;
+                      const attackRadius = TILE_SIZE * 1.5;
+
+                      enemiesRef.current.forEach((e, id) => {
+                          if (hasHit) return; // Single target hit per swing for now
+                          const ex = e.x + e.width/2;
+                          const ey = e.y + e.height/2;
+                          const dist = Math.sqrt((ex-hitX)**2 + (ey-hitY)**2);
+                          
+                          if (dist < attackRadius + Math.max(e.width, e.height)/2) {
+                              const dmg = selectedItem?.toolProps?.damage || 1;
+                              const kb = selectedItem?.toolProps?.knockback || 2;
+                              
+                              e.health -= dmg;
+                              e.vx = (e.x > p.x ? 1 : -1) * kb;
+                              e.vy = -3;
+                              e.iFrames = 20;
+                              
+                              spawnParticles(ex, ey, e.color || '#fff', 5);
+                              sfx.playBlip(200, 0.1, 'square', settings.audioVolume);
+                              
+                              broadcast('ENEMY_HIT', { id, damage: dmg, vx: e.vx, vy: e.vy });
+                              
+                              if (e.health <= 0) enemiesRef.current.delete(id);
+                              hasHit = true;
+
+                              // Durability Loss on Hit
+                              if (!dev.godMode && selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined) {
+                                  // Clone item for immutability
+                                  const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
+                                  newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
+
+                                  if (newItem.toolProps.durability <= 0) {
+                                       inv[selectedSlotRef.current] = null;
+                                       sfx.playBlip(100, 0.2, 'sawtooth', settingsRef.current.audioVolume);
+                                  } else {
+                                       inv[selectedSlotRef.current] = newItem;
+                                  }
+                                  setInventoryState([...inv]);
+                              }
+                          }
+                      });
+                      
+                      if (hasHit) miningRef.current.attackCooldown = 20; // Cooldown frames
+                  }
+                  miningRef.current.attackCooldown -= dt;
               }
           }
       } else {
           miningRef.current.progress = 0;
           miningRef.current.swing = 0;
           miningRef.current.x = -1;
+          miningRef.current.attackCooldown = 0;
       }
   }, [effectiveIsMobile, zoom, broadcast, updateLighting, spawnParticles, addItemToInventory]);
 
@@ -1528,6 +1623,13 @@ export const Game: React.FC<GameProps> = ({
                  drawCracks(ctx, mx * TILE_SIZE - camX, my * TILE_SIZE - camY, miningRef.current.progress, maxH);
              }
         }
+    }
+
+    if (effectiveIsMobile && targetReticleRef.current.valid) {
+        const {x, y} = targetReticleRef.current;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - camX, y - camY, TILE_SIZE, TILE_SIZE);
     }
 
     const drawP = (p: Entity) => {
@@ -2070,6 +2172,33 @@ export const Game: React.FC<GameProps> = ({
         ref={containerRef} 
         className="relative w-full h-full overflow-hidden touch-none select-none bg-[#0b0e14]" 
         onContextMenu={(e) => e.preventDefault()}
+        onPointerDown={(e) => {
+             if (e.isPrimary && (e.button === 0 || e.pointerType === 'touch')) {
+                inputRef.current.mouse.leftDown = true;
+                const rect = containerRef.current?.getBoundingClientRect();
+                if(rect) {
+                     inputRef.current.mouse.x = e.clientX - rect.left;
+                     inputRef.current.mouse.y = e.clientY - rect.top;
+                }
+             }
+             if (e.button === 2) inputRef.current.mouse.rightDown = true;
+        }}
+        onPointerMove={(e) => {
+             if (e.isPrimary) {
+                 const rect = containerRef.current?.getBoundingClientRect();
+                 if(rect) {
+                     inputRef.current.mouse.x = e.clientX - rect.left;
+                     inputRef.current.mouse.y = e.clientY - rect.top;
+                 }
+             }
+        }}
+        onPointerUp={(e) => {
+             if (e.isPrimary) inputRef.current.mouse.leftDown = false;
+             if (e.button === 2) inputRef.current.mouse.rightDown = false;
+        }}
+        onPointerCancel={() => {
+             inputRef.current.mouse.leftDown = false;
+        }}
     >
       <canvas ref={canvasRef} className="block w-full h-full touch-none" />
       
@@ -2275,13 +2404,6 @@ export const Game: React.FC<GameProps> = ({
             }} 
             onAim={(v, active) => { 
                 mobileAimRef.current = { x: v.x, y: v.y, active }; 
-                if (active) { 
-                    inputRef.current.mouse.leftDown = true; 
-                    inputRef.current.mouse.x = (playerRef.current.x + playerRef.current.width/2 + v.x * 300 - cameraRef.current.x) * zoom; 
-                    inputRef.current.mouse.y = (playerRef.current.y + playerRef.current.height/2 + v.y * 300 - cameraRef.current.y) * zoom; 
-                } else {
-                    inputRef.current.mouse.leftDown = false; 
-                }
             }}
             onJumpStart={() => { inputRef.current.jump = true; }} 
             onJumpEnd={() => { inputRef.current.jump = false; }} 
