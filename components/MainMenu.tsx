@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-    Play, Settings, User, Globe, Box, ArrowRight, Hash, Edit3, Sparkles, Plus, Trash2, Clock
+    Play, Settings, User, Globe, Box, ArrowRight, Hash, Edit3, Sparkles, Plus, Trash2, Clock, GitCommit
 } from 'lucide-react';
 import { InputMode, GameSettings } from '../types';
 import { SettingsOverlay } from './SettingsOverlay';
 import { CharacterPreview } from './CharacterPreview';
+import { ChangelogModal } from './ChangelogModal';
 import { getSaveList, deleteWorld, SaveSummary } from '../utils/storage';
 
 interface MainMenuProps {
@@ -30,6 +31,7 @@ export const MainMenu: React.FC<MainMenuProps> = ({
     onStart, inputMode, onInputModeChange, settings, onSettingsChange
 }) => {
   const [showSettings, setShowSettings] = useState(false);
+  const [showChangelog, setShowChangelog] = useState(false);
   const [roomIdInput, setRoomIdInput] = useState('');
   const [activeTab, setActiveTab] = useState<'play' | 'custom'>('play');
   const [customizeTab, setCustomizeTab] = useState<'skin' | 'outfit' | 'hair'>('outfit');
@@ -307,13 +309,19 @@ export const MainMenu: React.FC<MainMenuProps> = ({
 
         </div>
 
-    {/* Footer */}
-    <div className="mt-8 flex justify-between items-center text-[10px] font-mono font-bold text-slate-800 w-full shrink-0">
-            <div className="flex gap-4">
-                <span>TERRARIUM ENGINE</span>
-            </div>
-            <div>BUILD 2024.05.20</div>
-    </div>
+        {/* Footer */}
+        <div className="mt-8 flex justify-between items-center text-[10px] font-mono font-bold text-slate-800 w-full shrink-0">
+                <div className="flex gap-4">
+                    <span>TERRARIUM ENGINE</span>
+                </div>
+                <button 
+                    onClick={() => setShowChangelog(true)}
+                    className="flex items-center gap-2 hover:text-blue-500 transition-colors cursor-pointer group"
+                >
+                    <GitCommit size={12} className="group-hover:text-blue-500" />
+                    <span>v1.2.0</span>
+                </button>
+        </div>
 
       </div>
 
@@ -324,6 +332,11 @@ export const MainMenu: React.FC<MainMenuProps> = ({
         onInputModeChange={onInputModeChange}
         settings={settings}
         onSettingsChange={onSettingsChange}
+      />
+
+      <ChangelogModal 
+        isOpen={showChangelog}
+        onClose={() => setShowChangelog(false)}
       />
     </div>
   );
