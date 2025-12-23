@@ -1,4 +1,6 @@
 
+
+
 import { BlockType, WallType, InventoryItem, ToolType, ArmorType } from './types';
 
 export const TILE_SIZE = 32;
@@ -39,6 +41,13 @@ export const BLOCK_COLORS: Record<BlockType, string> = {
   [BlockType.BRICK]: '#b71c1c',
   [BlockType.FURNACE]: '#374151',
   [BlockType.ANVIL]: '#1f2937',
+  [BlockType.SNOW]: '#f8fafc',
+  [BlockType.ICE]: '#93c5fd',
+  [BlockType.CACTUS]: '#4d7c0f',
+  [BlockType.SANDSTONE]: '#d4a373',
+  [BlockType.PINE_LEAVES]: '#14532d',
+  [BlockType.WATER]: 'rgba(66, 165, 245, 0.6)',
+  [BlockType.LAVA]: '#ef4444',
 };
 
 export const WALL_COLORS: Record<WallType, string> = {
@@ -47,6 +56,8 @@ export const WALL_COLORS: Record<WallType, string> = {
   [WallType.STONE]: '#455a64',
   [WallType.WOOD]: '#3e2723',
   [WallType.BRICK]: '#7f1d1d',
+  [WallType.SANDSTONE]: '#a16207',
+  [WallType.SNOW]: '#cbd5e1',
 };
 
 export const TOOL_COLORS: Record<number, string> = {
@@ -92,6 +103,13 @@ export const BLOCK_MINING_STATS: Record<BlockType, { hardness: number; requiredT
   [BlockType.GLASS]: { hardness: 4, requiredTool: ToolType.PICKAXE, minTier: 0 },
   [BlockType.FURNACE]: { hardness: 50, requiredTool: ToolType.PICKAXE, minTier: 0 },
   [BlockType.ANVIL]: { hardness: 100, requiredTool: ToolType.PICKAXE, minTier: 0 },
+  [BlockType.SNOW]: { hardness: 6, requiredTool: ToolType.SHOVEL, minTier: 0 },
+  [BlockType.ICE]: { hardness: 15, requiredTool: ToolType.PICKAXE, minTier: 0 },
+  [BlockType.CACTUS]: { hardness: 8, requiredTool: ToolType.AXE, minTier: 0 },
+  [BlockType.SANDSTONE]: { hardness: 45, requiredTool: ToolType.PICKAXE, minTier: 0 },
+  [BlockType.PINE_LEAVES]: { hardness: 2, requiredTool: ToolType.AXE, minTier: 0 },
+  [BlockType.WATER]: { hardness: Infinity, requiredTool: ToolType.NONE, minTier: 0 },
+  [BlockType.LAVA]: { hardness: Infinity, requiredTool: ToolType.NONE, minTier: 0 },
 };
 
 export const CREATE_ITEM = {
@@ -104,6 +122,13 @@ export const CREATE_ITEM = {
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 0, damage: 15, knockback: 6,
       swingSpeed: 0.08, attackRange: 55, scale: 1.4, durability: 60, maxDurability: 60
+    }
+  }),
+  wooden_bow: (): InventoryItem => ({
+    id: 'wooden_bow', name: 'Wooden Bow', count: 1, maxStack: 1, isBlock: false,
+    toolProps: { 
+      type: ToolType.BOW, efficiency: 1, tier: 0, damage: 12, knockback: 4,
+      swingSpeed: 0.03, attackRange: 400, scale: 1.0, durability: 100, maxDurability: 100, projectileSpeed: 16
     }
   }),
   iron_sword: (): InventoryItem => ({
@@ -157,7 +182,7 @@ export const CREATE_ITEM = {
     const name = BlockType[type] || 'Unknown';
     return {
       id: `block_${type}`,
-      name: name.charAt(0) + name.slice(1).toLowerCase(),
+      name: name.charAt(0) + name.slice(1).toLowerCase().replace('_', ' '),
       count: 1,
       maxStack: 999,
       isBlock: true,
@@ -197,6 +222,12 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
     name: 'Wooden Sword',
     result: CREATE_ITEM.wood_sword,
     ingredients: [{ id: `block_${BlockType.WOOD}`, count: 5 }]
+  },
+  {
+    id: 'recipe_wooden_bow',
+    name: 'Wooden Bow',
+    result: CREATE_ITEM.wooden_bow,
+    ingredients: [{ id: `block_${BlockType.WOOD}`, count: 10 }]
   },
   {
     id: 'recipe_iron_sword',

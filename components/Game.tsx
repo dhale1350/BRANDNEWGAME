@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { 
-  BlockType, WallType, Entity, InputState, InventoryItem, ToolType, NetworkMessage, InputMode, GameSettings, EntityType, DevSettings, TestInterface, ArmorType 
+  BlockType, WallType, Entity, InputState, InventoryItem, ToolType, NetworkMessage, InputMode, GameSettings, EntityType, DevSettings, TestInterface, ArmorType, Projectile 
 } from '../types';
 import { 
   TILE_SIZE, CHUNK_SIZE, WORLD_WIDTH, WORLD_HEIGHT, GRAVITY, FRICTION, MOVE_SPEED, 
@@ -193,16 +193,19 @@ class SoundEngine {
           case BlockType.DIRT:
           case BlockType.GRASS:
           case BlockType.SAND:
+          case BlockType.SNOW:
               type = 'sawtooth';
               freqStart = 100 + Math.random() * 30;
               duration = 0.12;
               break;
           case BlockType.WOOD:
+          case BlockType.CACTUS:
               type = 'triangle';
               freqStart = 200 + Math.random() * 50;
               duration = 0.1;
               break;
           case BlockType.GLASS:
+          case BlockType.ICE:
               type = 'sine';
               freqStart = 800;
               break;
@@ -336,13 +339,14 @@ export const Game: React.FC<GameProps> = ({
     health: PLAYER_MAX_HEALTH, maxHealth: PLAYER_MAX_HEALTH,
     id: 'pending', color: settings.playerColor, hairColor: settings.playerHair, skinColor: settings.playerSkin,
     name: settings.playerName,
-    facing: 'right', animTimer: 0, iFrames: 0, type: EntityType.PLAYER
+    facing: 'right', animTimer: 0, iFrames: 0, type: EntityType.PLAYER, aimAngle: 0
   });
 
   // REFERENCES FOR GAME ENTITIES
   const enemiesRef = useRef<Map<string, Entity>>(new Map());
-  const npcsRef = useRef<Map<string, Entity>>(new Map()); // NEW: Friendly NPCs
+  const npcsRef = useRef<Map<string, Entity>>(new Map()); 
   const remotePlayersRef = useRef<Map<string, Entity>>(new Map());
+  const projectilesRef = useRef<Map<string, Projectile>>(new Map()); // NEW: Projectiles
   const [remotePlayersList, setRemotePlayersList] = useState<Entity[]>([]);
 
   const cameraRef = useRef({ x: 0, y: 0 });
@@ -355,7 +359,6 @@ export const Game: React.FC<GameProps> = ({
   const mobileAimRef = useRef({ x: 0, y: 0, active: false });
   const targetReticleRef = useRef<{x: number, y: number, valid: boolean}>({x: 0, y: 0, valid: false});
 
-  // Inventory now 33 slots (0-29 main, 30 helmet, 31 chest, 32 legs)
   const inventoryRef = useRef<(InventoryItem | null)[]>(new Array(33).fill(null));
   const [inventoryState, setInventoryState] = useState<(InventoryItem | null)[]>(new Array(33).fill(null));
   const selectedSlotRef = useRef(0);
@@ -430,6 +433,25 @@ export const Game: React.FC<GameProps> = ({
     }
   }, []);
 
+  const spawnProjectile = useCallback((x: number, y: number, angle: number, speed: number, damage: number, ownerId: string) => {
+      const id = 'proj_' + Math.random().toString(36).substr(2, 9);
+      const proj: Projectile = {
+          id,
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          ownerId,
+          damage,
+          life: 300, // 5 seconds
+          type: 'arrow',
+          width: 8, height: 4,
+          knockback: 4,
+          angle
+      };
+      projectilesRef.current.set(id, proj);
+      return proj;
+  }, []);
+
   const updateLighting = useCallback((minX: number = 0, maxX: number = WORLD_WIDTH) => {
     if (!worldRef.current.length) return;
     if (!lightRef.current.length) lightRef.current = new Float32Array(WORLD_WIDTH * WORLD_HEIGHT);
@@ -447,10 +469,10 @@ export const Game: React.FC<GameProps> = ({
         const b = world[idx] as BlockType;
         const w = walls[idx] as WallType;
         
-        if (b !== BlockType.AIR && b !== BlockType.LEAVES) {
+        if (b !== BlockType.AIR && b !== BlockType.LEAVES && b !== BlockType.PINE_LEAVES && b !== BlockType.CACTUS) {
           currentLight *= 0.58; 
         } else if (w !== WallType.AIR) {
-          currentLight *= 0.9; // Walls reduce light slightly but don't block it fully
+          currentLight *= 0.9; 
         }
 
         light[idx] = currentLight;
@@ -491,7 +513,7 @@ export const Game: React.FC<GameProps> = ({
       for (let x = startX; x <= endX; x++) {
         if (x < 0 || x >= WORLD_WIDTH || y < 0 || y >= WORLD_HEIGHT) continue;
         const b = worldRef.current[y * WORLD_WIDTH + x] as BlockType;
-        if (b !== BlockType.AIR && b !== BlockType.LEAVES) {
+        if (b !== BlockType.AIR && b !== BlockType.LEAVES && b !== BlockType.PINE_LEAVES && b !== BlockType.CACTUS) {
              collided = true;
              if (axis === 'x') {
                 if (ent.vx > 0) ent.x = x * TILE_SIZE - ent.width - 0.01;
@@ -536,10 +558,8 @@ export const Game: React.FC<GameProps> = ({
         health: stats.hp, maxHealth: stats.hp,
         type, color: stats.color, iFrames: 0, jumpTimer: 0,
         name: type === EntityType.GUIDE ? 'Guide' : undefined,
-        // Guide specific visuals
         hairColor: type === EntityType.GUIDE ? '#8d5524' : undefined,
         skinColor: type === EntityType.GUIDE ? '#ffdbac' : undefined,
-        // NPC AI State
         state: 'idle', stateTimer: 0
       };
 
@@ -576,7 +596,6 @@ export const Game: React.FC<GameProps> = ({
 
   const addItemToInventory = useCallback((newItem: InventoryItem) => {
     const inv = inventoryRef.current;
-    // Don't auto-stack into armor slots (30-32)
     for (let i = 0; i < 30; i++) {
         const item = inv[i];
         if (item && item.id === newItem.id && item.count < item.maxStack) {
@@ -633,11 +652,9 @@ export const Game: React.FC<GameProps> = ({
   const handleSaveGame = useCallback((silent: boolean = false) => {
       if (!saveId) return;
       
-      // Only show UI feedback if not silent (manual save or exit)
       if (!silent) setSaveStatus('saving');
       
       const p = playerRef.current;
-      // Stable reference to settings to avoid dependency change
       p.color = settingsRef.current.playerColor;
       p.hairColor = settingsRef.current.playerHair;
       p.skinColor = settingsRef.current.playerSkin;
@@ -659,11 +676,10 @@ export const Game: React.FC<GameProps> = ({
       }
   }, [saveId]);
 
-  // Auto-Save Effect
   useEffect(() => {
       if (!saveId) return;
       const interval = setInterval(() => {
-          handleSaveGame(true); // Silent save every second
+          handleSaveGame(true); 
       }, 1000); 
       return () => clearInterval(interval);
   }, [saveId, handleSaveGame]);
@@ -673,7 +689,6 @@ export const Game: React.FC<GameProps> = ({
   const finishLoading = useCallback(() => {
     try {
         setTimeout(() => {
-            // LOAD CHECK
             if (!worldRef.current.length) {
                 if (saveId) {
                     const save = loadWorld(saveId);
@@ -694,7 +709,6 @@ export const Game: React.FC<GameProps> = ({
                         if(save.player.hairColor) p.hairColor = save.player.hairColor;
                         if(save.player.skinColor) p.skinColor = save.player.skinColor;
 
-                        // Ensure loaded inventory matches size 33
                         const loadedInv = save.player.inventory;
                         inventoryRef.current = new Array(33).fill(null);
                         for(let i=0; i<Math.min(loadedInv.length, 33); i++) {
@@ -702,7 +716,6 @@ export const Game: React.FC<GameProps> = ({
                         }
                         setInventoryState([...inventoryRef.current]);
                     } else {
-                        // New World but has saveId target
                         const gen = generateWorld(worldSeedRef.current);
                         worldRef.current = gen.world;
                         wallsRef.current = gen.walls;
@@ -713,20 +726,18 @@ export const Game: React.FC<GameProps> = ({
                         playerRef.current.x = spawnX * TILE_SIZE;
                         playerRef.current.y = (spawnY - 5) * TILE_SIZE;
                         
-                        // Init Inventory
                         if (!inventoryRef.current[0]) {
                             inventoryRef.current[0] = CREATE_ITEM.wood_pickaxe();
                             inventoryRef.current[1] = CREATE_ITEM.wood_sword();
-                            inventoryRef.current[2] = CREATE_ITEM.block(BlockType.WOOD);
-                            inventoryRef.current[2]!.count = 5;
+                            inventoryRef.current[2] = CREATE_ITEM.wooden_bow();
+                            inventoryRef.current[3] = CREATE_ITEM.block(BlockType.WOOD);
+                            inventoryRef.current[3]!.count = 20;
                             setInventoryState([...inventoryRef.current]);
                         }
                         
-                        // Initial Save
                         handleSaveGame(true);
                     }
                 } else {
-                    // Classic Gen (Multiplayer / Temp)
                     const gen = generateWorld(worldSeedRef.current);
                     worldRef.current = gen.world;
                     wallsRef.current = gen.walls;
@@ -739,14 +750,14 @@ export const Game: React.FC<GameProps> = ({
                     if (!inventoryRef.current[0]) {
                         inventoryRef.current[0] = CREATE_ITEM.wood_pickaxe();
                         inventoryRef.current[1] = CREATE_ITEM.wood_sword();
-                        inventoryRef.current[2] = CREATE_ITEM.block(BlockType.WOOD);
-                        inventoryRef.current[2]!.count = 5;
+                        inventoryRef.current[2] = CREATE_ITEM.wooden_bow();
+                        inventoryRef.current[3] = CREATE_ITEM.block(BlockType.WOOD);
+                        inventoryRef.current[3]!.count = 20;
                         setInventoryState([...inventoryRef.current]);
                     }
                 }
             }
 
-            // SAFETY: Calculate Spawn if Joining Player is at 0,0
             if (playerRef.current.x === 0 && playerRef.current.y === 0 && worldRef.current.length > 0) {
                 const spawnX = WORLD_WIDTH / 2;
                 let spawnY = 0;
@@ -754,19 +765,16 @@ export const Game: React.FC<GameProps> = ({
                 playerRef.current.x = spawnX * TILE_SIZE;
                 playerRef.current.y = (spawnY - 5) * TILE_SIZE;
                 
-                // Also give starter items to joiners if empty
                 if (!inventoryRef.current[0]) {
                     inventoryRef.current[0] = CREATE_ITEM.wood_pickaxe();
                     inventoryRef.current[1] = CREATE_ITEM.wood_sword();
-                    inventoryRef.current[2] = CREATE_ITEM.block(BlockType.WOOD);
-                    inventoryRef.current[2]!.count = 5;
+                    inventoryRef.current[2] = CREATE_ITEM.wooden_bow();
                     setInventoryState([...inventoryRef.current]);
                 }
             }
 
             updateLighting();
             
-            // Spawn Guide NPC if none exists
             if (npcsRef.current.size === 0 && !roomId) {
                 spawnEntityAtLocation(EntityType.GUIDE, playerRef.current.x + 100, playerRef.current.y);
             }
@@ -796,14 +804,12 @@ export const Game: React.FC<GameProps> = ({
       console.log('Peer Connected:', conn.peer);
       connectionsRef.current.set(conn.peer, conn);
       setActivePeersCount(connectionsRef.current.size + 1);
-      // Ensure we only request init if we are joining (roomId is set) and connected to the right peer
       if (roomId && conn.peer === roomId) {
           setIsSyncing(true);
           conn.send({ type: 'REQUEST_INIT', payload: {}, senderId: playerRef.current.id });
       }
       conn.send({ type: 'PLAYER_MOVE', payload: { 
           x: playerRef.current.x, y: playerRef.current.y, color: playerRef.current.color, hairColor: playerRef.current.hairColor, name: playerRef.current.name, facing: playerRef.current.facing,
-          // Sync visuals? For now just base traits. Armor sync could be added here.
       }, senderId: playerRef.current.id });
     });
     
@@ -898,6 +904,15 @@ export const Game: React.FC<GameProps> = ({
             }
             break;
         }
+        case 'PROJECTILE_SPAWN': {
+             const { id, x, y, vx, vy, ownerId, damage } = msg.payload;
+             const p: Projectile = {
+                 id, x, y, vx, vy, ownerId, damage,
+                 life: 300, type: 'arrow', width: 8, height: 4, knockback: 4, angle: Math.atan2(vy, vx)
+             };
+             projectilesRef.current.set(id, p);
+             break;
+        }
         case 'ENEMY_SYNC':
             const serverIds = new Set(msg.payload.enemies.map((e: any) => e.id));
             for (const id of enemiesRef.current.keys()) {
@@ -939,7 +954,6 @@ export const Game: React.FC<GameProps> = ({
 
   }, [roomId, finishLoading, updateLighting, spawnParticles]); 
 
-  // --- PHYSICS ENGINE & INPUT HANDLER ---
   const redrawChunk = useCallback((cx: number, cy: number) => {
     const key = `${cx},${cy}`;
     let entry = chunkCacheRef.current.get(key);
@@ -1001,7 +1015,6 @@ export const Game: React.FC<GameProps> = ({
   const drawCracks = (ctx: CanvasRenderingContext2D, x: number, y: number, progress: number, max: number) => {
       const ratio = progress / max;
       if (ratio < 0.05) return;
-      
       const stage = Math.min(4, Math.floor(ratio * 5)); 
       
       ctx.save();
@@ -1011,29 +1024,12 @@ export const Game: React.FC<GameProps> = ({
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
 
-      if (stage >= 0) {
-          ctx.moveTo(16, 16); ctx.lineTo(10, 10);
-          ctx.moveTo(16, 16); ctx.lineTo(22, 22);
-      }
-      if (stage >= 1) {
-          ctx.moveTo(16, 16); ctx.lineTo(16, 6);
-          ctx.moveTo(16, 16); ctx.lineTo(26, 16);
-      }
-      if (stage >= 2) {
-           ctx.moveTo(10, 10); ctx.lineTo(4, 12);
-           ctx.moveTo(22, 22); ctx.lineTo(28, 20);
-           ctx.moveTo(16, 6); ctx.lineTo(10, 2);
-      }
-      if (stage >= 3) {
-           ctx.moveTo(16, 16); ctx.lineTo(6, 26);
-           ctx.moveTo(26, 16); ctx.lineTo(30, 8);
-           ctx.moveTo(10, 10); ctx.lineTo(2, 2);
-      }
+      if (stage >= 0) { ctx.moveTo(16, 16); ctx.lineTo(10, 10); ctx.moveTo(16, 16); ctx.lineTo(22, 22); }
+      if (stage >= 1) { ctx.moveTo(16, 16); ctx.lineTo(16, 6); ctx.moveTo(16, 16); ctx.lineTo(26, 16); }
+      if (stage >= 2) { ctx.moveTo(10, 10); ctx.lineTo(4, 12); ctx.moveTo(22, 22); ctx.lineTo(28, 20); ctx.moveTo(16, 6); ctx.lineTo(10, 2); }
+      if (stage >= 3) { ctx.moveTo(16, 16); ctx.lineTo(6, 26); ctx.moveTo(26, 16); ctx.lineTo(30, 8); ctx.moveTo(10, 10); ctx.lineTo(2, 2); }
       
-      if (ratio > 0.8) {
-          ctx.fillStyle = `rgba(255,255,255,${(ratio - 0.8) * 1.5})`;
-          ctx.fillRect(0,0,32,32);
-      }
+      if (ratio > 0.8) { ctx.fillStyle = `rgba(255,255,255,${(ratio - 0.8) * 1.5})`; ctx.fillRect(0,0,32,32); }
 
       ctx.stroke();
       ctx.restore();
@@ -1095,6 +1091,10 @@ export const Game: React.FC<GameProps> = ({
       let isPressed = false;
       const reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
 
+      // Determine Cursor World Pos
+      let cursorX = 0, cursorY = 0;
+      let hasTarget = false;
+
       if (effectiveIsMobile) {
           if (mobileAimRef.current.active) {
               const v = mobileAimRef.current;
@@ -1109,18 +1109,21 @@ export const Game: React.FC<GameProps> = ({
                   offY *= ratio;
               }
               
-              const aimX = (p.x + p.width / 2) + offX;
-              const aimY = (p.y + p.height / 2) + offY;
+              cursorX = (p.x + p.width / 2) + offX;
+              cursorY = (p.y + p.height / 2) + offY;
               
-              tx = Math.floor(aimX / TILE_SIZE);
-              ty = Math.floor(aimY / TILE_SIZE);
+              tx = Math.floor(cursorX / TILE_SIZE);
+              ty = Math.floor(cursorY / TILE_SIZE);
               isPressed = true;
+              hasTarget = true;
               targetReticleRef.current = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, valid: true };
           } else if (input.mouse.leftDown) {
-              // Direct touch fallback
-              tx = Math.floor((input.mouse.x / zoom + cam.x) / TILE_SIZE);
-              ty = Math.floor((input.mouse.y / zoom + cam.y) / TILE_SIZE);
+              cursorX = input.mouse.x / zoom + cam.x;
+              cursorY = input.mouse.y / zoom + cam.y;
+              tx = Math.floor(cursorX / TILE_SIZE);
+              ty = Math.floor(cursorY / TILE_SIZE);
               isPressed = true;
+              hasTarget = true;
               targetReticleRef.current = { x: tx * TILE_SIZE, y: ty * TILE_SIZE, valid: true };
           } else {
               targetReticleRef.current.valid = false;
@@ -1131,22 +1134,69 @@ export const Game: React.FC<GameProps> = ({
               const ax = gp.axes[2] || 0;
               const ay = gp.axes[3] || 0;
               if (Math.abs(ax) > 0.1 || Math.abs(ay) > 0.1) {
-                  tx = Math.floor((p.x + p.width/2 + ax * 150) / TILE_SIZE);
-                  ty = Math.floor((p.y + p.height/2 + ay * 150) / TILE_SIZE);
+                  cursorX = p.x + p.width/2 + ax * 150;
+                  cursorY = p.y + p.height/2 + ay * 150;
+                  tx = Math.floor(cursorX / TILE_SIZE);
+                  ty = Math.floor(cursorY / TILE_SIZE);
                   isPressed = gp.buttons[7].pressed;
+                  hasTarget = true;
               }
           }
       } else {
-          tx = Math.floor((input.mouse.x / zoom + cam.x) / TILE_SIZE);
-          ty = Math.floor((input.mouse.y / zoom + cam.y) / TILE_SIZE);
+          cursorX = input.mouse.x / zoom + cam.x;
+          cursorY = input.mouse.y / zoom + cam.y;
+          tx = Math.floor(cursorX / TILE_SIZE);
+          ty = Math.floor(cursorY / TILE_SIZE);
           isPressed = input.mouse.leftDown;
+          hasTarget = true;
       }
 
-      const dist = Math.sqrt(Math.pow((tx * TILE_SIZE + TILE_SIZE/2) - (p.x + p.width/2), 2) + Math.pow((ty * TILE_SIZE + TILE_SIZE/2) - (p.y + p.height/2), 2));
+      // Calculate Angle for Arm
+      if (hasTarget) {
+          const dx = cursorX - (p.x + p.width/2);
+          const dy = cursorY - (p.y + p.height/2);
+          p.aimAngle = Math.atan2(dy, dx);
+          if (Math.abs(dx) > 10) p.facing = dx > 0 ? 'right' : 'left';
+      } else {
+          p.aimAngle = undefined;
+      }
+
+      const dist = hasTarget ? Math.sqrt(Math.pow((tx * TILE_SIZE + TILE_SIZE/2) - (p.x + p.width/2), 2) + Math.pow((ty * TILE_SIZE + TILE_SIZE/2) - (p.y + p.height/2), 2)) : 9999;
       
-      if (dist > reach && !dev.infiniteReach) isPressed = false;
+      if (dist > reach && !dev.infiniteReach && selectedItem?.toolProps?.type !== ToolType.BOW) isPressed = false;
 
       if (isPressed) {
+          // BOW LOGIC
+          if (selectedItem?.toolProps?.type === ToolType.BOW) {
+              if (miningRef.current.attackCooldown <= 0) {
+                  // Fire arrow
+                  const speed = selectedItem.toolProps.projectileSpeed || 15;
+                  const damage = selectedItem.toolProps.damage || 10;
+                  const angle = p.aimAngle || 0;
+                  
+                  // Spawn local
+                  const proj = spawnProjectile(p.x + p.width/2, p.y + p.height/2, angle, speed, damage, p.id || 'local');
+                  
+                  // Broadcast
+                  broadcast('PROJECTILE_SPAWN', { id: proj.id, x: proj.x, y: proj.y, vx: proj.vx, vy: proj.vy, ownerId: proj.ownerId, damage: proj.damage });
+                  
+                  sfx.playBlip(300, 0.1, 'sawtooth', settings.audioVolume); // Shoot sound
+                  
+                  // Durability
+                  if (!dev.godMode && !dev.infiniteDurability && selectedItem.toolProps.durability !== undefined) {
+                       const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
+                       newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
+                       if (newItem.toolProps.durability <= 0) inv[selectedSlotRef.current] = null;
+                       else inv[selectedSlotRef.current] = newItem;
+                       setInventoryState([...inv]);
+                  }
+                  
+                  miningRef.current.attackCooldown = 30; // Refire rate
+              }
+              miningRef.current.attackCooldown -= dt;
+              return; // Skip other interactions if using bow
+          }
+
           if (tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT) {
               const block = world[ty * WORLD_WIDTH + tx];
               const wall = walls[ty * WORLD_WIDTH + tx];
@@ -1181,7 +1231,8 @@ export const Game: React.FC<GameProps> = ({
                            lastPlacementTimeRef.current = now;
                       }
                   }
-              } else if (block !== BlockType.AIR) {
+              } else if (block !== BlockType.AIR && block !== BlockType.LEAVES && block !== BlockType.PINE_LEAVES && block !== BlockType.CACTUS && block !== BlockType.WATER && block !== BlockType.LAVA && block !== BlockType.AIR) {
+                   // Mining hard blocks
                    if (miningRef.current.x !== tx || miningRef.current.y !== ty) {
                        miningRef.current = { x: tx, y: ty, progress: 0, swing: 0, isAttacking: false, hasHit: false, attackCooldown: 0 };
                    }
@@ -1210,14 +1261,13 @@ export const Game: React.FC<GameProps> = ({
                            
                            // Mining Durability Loss
                            if (selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined && !dev.infiniteDurability) {
-                               // Clone item for immutability
                                const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
                                newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
                                
                                if (newItem.toolProps.durability <= 0) {
                                    inv[selectedSlotRef.current] = null;
                                    sfx.playBlip(100, 0.2, 'sawtooth', settingsRef.current.audioVolume);
-                                   spawnParticles(p.x, p.y - 10, '#ffffff', 10); // Break effect
+                                   spawnParticles(p.x, p.y - 10, '#ffffff', 10); 
                                } else {
                                    inv[selectedSlotRef.current] = newItem;
                                }
@@ -1231,20 +1281,30 @@ export const Game: React.FC<GameProps> = ({
                        miningRef.current.progress = 0;
                    }
               } else {
-                  // SWING ATTACK (Hitting Air)
+                  // Instant break blocks (Leaves, Cactus etc) or Air Swing
+                   if ([BlockType.LEAVES, BlockType.PINE_LEAVES, BlockType.CACTUS].includes(block)) {
+                       if (now - lastPlacementTimeRef.current > 200) {
+                           world[ty * WORLD_WIDTH + tx] = BlockType.AIR;
+                           broadcast('WORLD_CHANGE', { x: tx, y: ty, blockType: BlockType.AIR });
+                           updateLighting(tx - 5, tx + 6);
+                           sfx.playDig(block);
+                           lastPlacementTimeRef.current = now;
+                       }
+                   }
+
+                  // SWING ATTACK (Hitting Air or Soft Blocks)
                   miningRef.current.swing = (Math.sin(now / 50) + 1) / 2;
                   miningRef.current.x = -1;
                   
-                  // Attack Hit Logic
+                  // Attack Hit Logic (Melee)
                   if (miningRef.current.attackCooldown <= 0) {
                       let hasHit = false;
-                      // Simple melee hit detection box based on cursor/aim
-                      const hitX = tx * TILE_SIZE + TILE_SIZE/2;
-                      const hitY = ty * TILE_SIZE + TILE_SIZE/2;
-                      const attackRadius = TILE_SIZE * 1.5;
+                      const hitX = cursorX;
+                      const hitY = cursorY;
+                      const attackRadius = TILE_SIZE * 2;
 
                       enemiesRef.current.forEach((e, id) => {
-                          if (hasHit) return; // Single target hit per swing for now
+                          if (hasHit) return; 
                           const ex = e.x + e.width/2;
                           const ey = e.y + e.height/2;
                           const dist = Math.sqrt((ex-hitX)**2 + (ey-hitY)**2);
@@ -1268,7 +1328,6 @@ export const Game: React.FC<GameProps> = ({
 
                               // Durability Loss on Hit
                               if (!dev.godMode && selectedItem && selectedItem.toolProps && selectedItem.toolProps.durability !== undefined && !dev.infiniteDurability) {
-                                  // Clone item for immutability
                                   const newItem = { ...selectedItem, toolProps: { ...selectedItem.toolProps } };
                                   newItem.toolProps.durability = (newItem.toolProps.durability || 0) - 1;
 
@@ -1292,15 +1351,56 @@ export const Game: React.FC<GameProps> = ({
           miningRef.current.progress = 0;
           miningRef.current.swing = 0;
           miningRef.current.x = -1;
-          miningRef.current.attackCooldown = 0;
+          miningRef.current.attackCooldown = Math.max(0, miningRef.current.attackCooldown - dt);
       }
-  }, [effectiveIsMobile, zoom, broadcast, updateLighting, spawnParticles, addItemToInventory]);
+  }, [effectiveIsMobile, zoom, broadcast, updateLighting, spawnParticles, addItemToInventory, spawnProjectile]);
 
   const updatePhysics = (now: number, dt: number) => {
     const input = inputRef.current;
     const p = playerRef.current;
     const dev = devSettingsRef.current;
     
+    // Projectiles Physics
+    const deadProjs: string[] = [];
+    projectilesRef.current.forEach(proj => {
+        proj.vy += GRAVITY * 0.5 * dt; // Less gravity than player
+        proj.x += proj.vx * dt;
+        proj.y += proj.vy * dt;
+        proj.life -= dt;
+        proj.angle = Math.atan2(proj.vy, proj.vx);
+
+        if (proj.life <= 0) { deadProjs.push(proj.id); return; }
+
+        // Block Collision
+        const tx = Math.floor(proj.x / TILE_SIZE);
+        const ty = Math.floor(proj.y / TILE_SIZE);
+        if (tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT) {
+            const b = worldRef.current[ty * WORLD_WIDTH + tx];
+            if (b !== BlockType.AIR && b !== BlockType.LEAVES && b !== BlockType.PINE_LEAVES && b !== BlockType.CACTUS) {
+                deadProjs.push(proj.id);
+                // Particle splash
+                spawnParticles(proj.x, proj.y, '#ccc', 3);
+                return;
+            }
+        }
+
+        // Enemy Collision (Only if owner is self, to prevent double hits in multiplayer)
+        if (proj.ownerId === p.id) {
+            enemiesRef.current.forEach((e, eid) => {
+                if (e.x < proj.x + 4 && e.x + e.width > proj.x - 4 && e.y < proj.y + 4 && e.y + e.height > proj.y - 4) {
+                    e.health -= proj.damage;
+                    e.vx = (proj.vx > 0 ? 1 : -1) * proj.knockback;
+                    e.vy = -2;
+                    spawnParticles(e.x + e.width/2, e.y + e.height/2, e.color || '#fff', 5);
+                    broadcast('ENEMY_HIT', { id: eid, damage: proj.damage, vx: e.vx, vy: e.vy });
+                    if (e.health <= 0) enemiesRef.current.delete(eid);
+                    deadProjs.push(proj.id);
+                }
+            });
+        }
+    });
+    deadProjs.forEach(id => projectilesRef.current.delete(id));
+
     if (!dev.freezeTime) { 
         if (isHost) {
             worldTimeRef.current = (worldTimeRef.current + dev.timeScale) % 24000; 
@@ -1374,8 +1474,8 @@ export const Game: React.FC<GameProps> = ({
     }
     
     if (Math.abs(p.vx) > 0.1) {
-        p.facing = p.vx > 0 ? 'right' : 'left';
         p.animTimer = (p.animTimer || 0) + dt;
+        p.facing = p.vx > 0 ? 'right' : 'left';
     } else {
         p.animTimer = 0;
     }
@@ -1620,9 +1720,6 @@ export const Game: React.FC<GameProps> = ({
     const drawStartCY = camChunkY - drawPadding;
     const drawEndCY = camChunkY + viewportChunksH + drawPadding;
 
-    // --- DEBUG: CHUNK BORDERS ---
-    const showBorders = devSettingsRef.current.showChunkBorders;
-
     for (let cx = loadStartCX; cx <= loadEndCX; cx++) {
         for (let cy = loadStartCY; cy <= loadEndCY; cy++) {
              if (cx < 0 || cy < 0 || cx >= WORLD_WIDTH / CHUNK_SIZE || cy >= WORLD_HEIGHT / CHUNK_SIZE) continue;
@@ -1635,17 +1732,6 @@ export const Game: React.FC<GameProps> = ({
                  const entry = chunkCacheRef.current.get(key);
                  if (entry && !entry.isEmpty && entry.canvas) {
                      ctx.drawImage(entry.canvas, cx * CHUNK_SIZE * TILE_SIZE - camX, cy * CHUNK_SIZE * TILE_SIZE - camY);
-                 }
-                 
-                 // Debug: Draw Border
-                 if (showBorders) {
-                     ctx.strokeStyle = '#06b6d4'; // Cyan
-                     ctx.lineWidth = 1;
-                     ctx.strokeRect(cx * CHUNK_SIZE * TILE_SIZE - camX, cy * CHUNK_SIZE * TILE_SIZE - camY, CHUNK_SIZE * TILE_SIZE, CHUNK_SIZE * TILE_SIZE);
-                     
-                     ctx.fillStyle = '#06b6d4';
-                     ctx.font = '8px monospace';
-                     ctx.fillText(`${cx},${cy}`, cx * CHUNK_SIZE * TILE_SIZE - camX + 2, cy * CHUNK_SIZE * TILE_SIZE - camY + 10);
                  }
              }
         }
@@ -1708,7 +1794,6 @@ export const Game: React.FC<GameProps> = ({
       const bob = isMoving ? Math.abs(Math.sin(walkCycle * 2)) * 2 : 0;
       const breath = !isMoving ? Math.sin(time / 200) * 1 : 0;
 
-      // GET EQUIPPED ARMOR (If local player)
       let helmetItem, chestItem, legsItem;
       if (p.id === playerRef.current.id) {
           helmetItem = inventoryRef.current[30];
@@ -1716,68 +1801,48 @@ export const Game: React.FC<GameProps> = ({
           legsItem = inventoryRef.current[32];
       }
 
-      // Base Leg Color
       const pantColor = p.type === EntityType.GUIDE ? '#1e3a8a' : '#1e293b'; 
 
-      // -- DRAW LEGS --
       const drawLeg = (isBack: boolean) => {
           ctx.save();
           ctx.translate(isBack ? -2 : 2, -10);
           ctx.rotate(isMoving ? (isBack ? -1 : 1) * Math.sin(walkCycle) * 0.6 : 0);
-          
-          // Pants Base
           ctx.fillStyle = pantColor;
           ctx.fillRect(-3, 0, 6, 12); 
-
-          // Armor (Leggings)
           if (legsItem && legsItem.armorProps) {
               const ap = getToolPalette(legsItem.armorProps.tier);
-              // Greave
               ctx.fillStyle = ap.base;
-              ctx.fillRect(-3, 6, 6, 6); // Boot/Greave bottom
+              ctx.fillRect(-3, 6, 6, 6); 
               ctx.fillStyle = ap.light;
-              ctx.fillRect(-2, 7, 2, 4); // Shine
-              
-              // Knee Pad
+              ctx.fillRect(-2, 7, 2, 4); 
               ctx.fillStyle = ap.dark;
               ctx.fillRect(-3, 4, 6, 2);
           }
           ctx.restore();
       };
 
-      drawLeg(true); // Back Leg
+      drawLeg(true); 
 
       ctx.save();
       ctx.translate(0, -bob + breath);
 
-      drawLeg(false); // Front Leg
+      drawLeg(false); 
 
-      // -- DRAW TORSO --
-      // Base Shirt
       ctx.fillStyle = p.color || settingsRef.current.playerColor;
       ctx.fillRect(-6, -22, 12, 12);
       
-      // Armor (Chestplate)
       if (chestItem && chestItem.armorProps) {
           const ap = getToolPalette(chestItem.armorProps.tier);
-          
-          // Main Plate
           ctx.fillStyle = ap.base;
-          ctx.fillRect(-6, -22, 12, 12); // Cover shirt
-          
-          // Detail / Shading
+          ctx.fillRect(-6, -22, 12, 12); 
           ctx.fillStyle = ap.dark;
-          ctx.fillRect(-2, -22, 4, 12); // Center strip
-          
-          ctx.fillStyle = ap.light; // Highlights
+          ctx.fillRect(-2, -22, 4, 12); 
+          ctx.fillStyle = ap.light;
           ctx.fillRect(-5, -20, 2, 4);
           ctx.fillRect(3, -20, 2, 4);
-          
-          // Belt
           ctx.fillStyle = ap.outline;
           ctx.fillRect(-6, -11, 12, 2);
       } else {
-          // Standard Shirt Detail
           ctx.fillStyle = 'rgba(0,0,0,0.15)';
           ctx.fillRect(-6, -12, 12, 2);
       }
@@ -1786,62 +1851,44 @@ export const Game: React.FC<GameProps> = ({
       ctx.translate(0, -22);
       ctx.rotate(-lean * 0.5 + (isMoving ? Math.sin(walkCycle * 2) * 0.05 : 0));
       
-      // -- DRAW HEAD --
       ctx.fillStyle = p.skinColor || '#ffdbac';
       ctx.fillRect(-8, -16, 16, 16);
       
-      // Face
       ctx.fillStyle = '#111';
       ctx.fillRect(2, -9, 2, 2);
       ctx.fillRect(-4, -9, 2, 2);
 
-      // Hair
       if (!helmetItem) {
           ctx.fillStyle = p.hairColor || settingsRef.current.playerHair;
           ctx.fillRect(-9, -19, 18, 5);
           ctx.fillRect(-9, -19, 5, 14);
           ctx.fillRect(8, -14, 1, 4);
       } 
-      // Armor (Helmet)
       else if (helmetItem.armorProps) {
           const ap = getToolPalette(helmetItem.armorProps.tier);
           const isDiamond = helmetItem.armorProps.tier >= 4;
-
-          // Helmet Base
           ctx.fillStyle = ap.base;
-          ctx.fillRect(-9, -19, 18, 14); // Full coverage sides
-          ctx.fillRect(-9, -19, 18, 6);  // Top Dome thicker
-          
-          // Visor / Face Opening
+          ctx.fillRect(-9, -19, 18, 14); 
+          ctx.fillRect(-9, -19, 18, 6); 
           if (isDiamond) {
-              // Full face helm with slit
               ctx.fillStyle = ap.dark;
-              ctx.fillRect(-5, -11, 10, 8); // Dark visor area
+              ctx.fillRect(-5, -11, 10, 8); 
               ctx.fillStyle = ap.base; 
-              ctx.fillRect(-1, -11, 2, 8); // Vertical bar
-              ctx.fillRect(-5, -8, 10, 2); // Horizontal bar
-              
-              // Wings/Horns
+              ctx.fillRect(-1, -11, 2, 8); 
+              ctx.fillRect(-5, -8, 10, 2); 
               ctx.fillStyle = ap.light;
               ctx.fillRect(-11, -20, 2, 6);
               ctx.fillRect(9, -20, 2, 6);
           } else {
-              // Standard Helm (Open Face or T-slit)
-              ctx.clearRect(-4, -13, 8, 8); // Cut out face hole from box
-              ctx.fillStyle = p.skinColor || '#ffdbac'; // Re-draw face skin background just in case
+              ctx.clearRect(-4, -13, 8, 8); 
+              ctx.fillStyle = p.skinColor || '#ffdbac'; 
               ctx.fillRect(-4, -13, 8, 8); 
-              
-              // Re-draw eyes since we covered them or cut them
               ctx.fillStyle = '#111';
               ctx.fillRect(2, -9, 2, 2);
               ctx.fillRect(-4, -9, 2, 2);
-              
-              // Nasal Guard
               ctx.fillStyle = ap.base;
               ctx.fillRect(-1, -13, 2, 4);
           }
-          
-          // Top Highlight
           ctx.fillStyle = ap.light;
           ctx.fillRect(-6, -18, 4, 2);
       }
@@ -1870,10 +1917,25 @@ export const Game: React.FC<GameProps> = ({
           : (p as any).heldItem;
 
       const isSwinging = (p.id === playerRef.current.id) ? miningRef.current.swing > 0 : false;
+      const isBow = heldItem?.toolProps?.type === ToolType.BOW;
       
       let armAngle = 0;
 
-      if (isSwinging) {
+      if (isBow) {
+          // If aimed
+          if (p.aimAngle !== undefined) {
+             // adjust aim angle based on facing
+             // aimAngle is in radians world space (relative to player center)
+             // we are currently scaled by (facingDir, 1)
+             // so we need to flip angle if facing left
+             let aim = p.aimAngle;
+             if (p.facing === 'left') aim = Math.PI - aim;
+             
+             armAngle = aim;
+          } else {
+             armAngle = 0;
+          }
+      } else if (isSwinging) {
            const swing = miningRef.current.swing;
            const start = -Math.PI / 1.5;
            const end = Math.PI / 2;
@@ -1888,13 +1950,12 @@ export const Game: React.FC<GameProps> = ({
       ctx.fillStyle = p.color || settingsRef.current.playerColor;
       ctx.fillRect(-3, -2, 6, 8);
       
-      // Armor (Pauldrons overlay)
       if (chestItem && chestItem.armorProps) {
           const ap = getToolPalette(chestItem.armorProps.tier);
           ctx.fillStyle = ap.base;
-          ctx.fillRect(-4, -3, 8, 5); // Shoulder pad
+          ctx.fillRect(-4, -3, 8, 5); 
           ctx.fillStyle = ap.outline;
-          ctx.fillRect(-4, -3, 8, 1); // Top trim
+          ctx.fillRect(-4, -3, 8, 1); 
       }
 
       // Hand/Skin
@@ -1903,7 +1964,8 @@ export const Game: React.FC<GameProps> = ({
 
       if (heldItem) {
           ctx.translate(0, 10);
-          ctx.rotate(Math.PI / 2);
+          
+          if (!isBow) ctx.rotate(Math.PI / 2);
 
           if (heldItem.isBlock) {
              const size = 10;
@@ -2074,10 +2136,28 @@ export const Game: React.FC<GameProps> = ({
     npcsRef.current.forEach(drawP);
     enemiesRef.current.forEach(drawE); 
     drawP(playerRef.current);
+    
+    // Draw Projectiles
+    projectilesRef.current.forEach(p => {
+        const px = p.x - camX;
+        const py = p.y - camY;
+        
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(p.angle);
+        
+        // Arrow
+        ctx.fillStyle = '#8d6e63'; // Wood shaft
+        ctx.fillRect(-6, -1, 12, 2);
+        ctx.fillStyle = '#fff'; // Tip
+        ctx.fillRect(4, -1, 2, 2);
+        ctx.fillStyle = '#ccc'; // Fletching
+        ctx.fillRect(-6, -2, 3, 4);
 
-    // --- DEBUG: INFO OVERLAY ---
+        ctx.restore();
+    });
+
     if (devSettingsRef.current.debugInfo) {
-        // Calculate grid pos under cursor
         const { x, y } = inputRef.current.mouse;
         const wx = Math.floor((x / zoom + camX) / TILE_SIZE);
         const wy = Math.floor((y / zoom + camY) / TILE_SIZE);
@@ -2113,7 +2193,6 @@ export const Game: React.FC<GameProps> = ({
             ctx.fillText(l, x / zoom + 18, y / zoom + 25 + (i * 12));
         });
         
-        // Draw highlight
         ctx.strokeStyle = '#ffff00';
         ctx.lineWidth = 2;
         ctx.strokeRect(wx * TILE_SIZE - camX, wy * TILE_SIZE - camY, TILE_SIZE, TILE_SIZE);
@@ -2174,7 +2253,6 @@ export const Game: React.FC<GameProps> = ({
     refreshWorld: (minX: number, maxX: number) => updateLighting(minX, maxX)
   }), [spawnEntityAtLocation, addItemToInventory, updateLighting]);
 
-  // Connection Timeout Safety Valve
   useEffect(() => {
       if (roomId && !isLoaded) {
           const timer = setTimeout(() => {
@@ -2226,7 +2304,7 @@ export const Game: React.FC<GameProps> = ({
     return () => {
         broadcast('PLAYER_LEAVE', {});
         if (peerRef.current) { try { peerRef.current.destroy(); } catch(e) {} }
-        isInitializingRef.current = false; // Reset for Strict Mode re-mounts
+        isInitializingRef.current = false; 
     };
   }, [roomId, hostPeerId, setupConnection, broadcast, finishLoading]); 
 
@@ -2364,7 +2442,6 @@ export const Game: React.FC<GameProps> = ({
         )}
       </div>
 
-      {/* NPC Dialogue Overlay */}
       {activeDialogue && (
           <div className="fixed bottom-32 sm:bottom-40 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-white/20 p-4 rounded-2xl shadow-2xl backdrop-blur-xl z-[70] max-w-[90vw] sm:max-w-md animate-in slide-in-from-bottom-4 fade-in duration-200 pointer-events-auto flex gap-4 items-start">
               <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/30">
@@ -2394,7 +2471,6 @@ export const Game: React.FC<GameProps> = ({
           inventory={inventoryState} 
           onSwap={(a, b) => { 
               const inv = inventoryRef.current;
-              // Validation for armor slots
               const isValid = (idx: number, item: InventoryItem | null) => {
                   if (!item) return true;
                   if (idx === 30) return item.armorProps?.type === ArmorType.HELMET;
@@ -2403,9 +2479,8 @@ export const Game: React.FC<GameProps> = ({
                   return true;
               };
 
-              // Check if swap targets armor slots
               if ((a >= 30 && !isValid(a, inv[b])) || (b >= 30 && !isValid(b, inv[a]))) {
-                  return; // Invalid swap
+                  return; 
               }
 
               const tmp = inv[a]; 
@@ -2484,7 +2559,6 @@ export const Game: React.FC<GameProps> = ({
         />
       )}
 
-      {/* Save Notification Toast */}
       {saveStatus && (
           <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-black/80 border border-white/10 px-6 py-3 rounded-xl backdrop-blur-xl flex items-center gap-3 animate-in slide-in-from-bottom-4 fade-in duration-300 z-[60]">
               {saveStatus === 'saving' ? (

@@ -58,6 +58,13 @@ export enum BlockType {
   BRICK = 13,
   FURNACE = 14,
   ANVIL = 15,
+  SNOW = 16,
+  ICE = 17,
+  CACTUS = 18,
+  SANDSTONE = 19,
+  PINE_LEAVES = 20,
+  WATER = 21,
+  LAVA = 22,
 }
 
 export enum WallType {
@@ -66,6 +73,8 @@ export enum WallType {
   STONE = 2,
   WOOD = 3,
   BRICK = 4,
+  SANDSTONE = 5,
+  SNOW = 6,
 }
 
 export enum ToolType {
@@ -74,6 +83,7 @@ export enum ToolType {
   AXE = 'axe',
   SHOVEL = 'shovel',
   SWORD = 'sword',
+  BOW = 'bow',
 }
 
 export enum ArmorType {
@@ -100,6 +110,7 @@ export interface ToolProps {
   scale?: number;
   durability?: number;
   maxDurability?: number;
+  projectileSpeed?: number;
 }
 
 export interface InventoryItem {
@@ -152,6 +163,24 @@ export interface Entity {
   helmetColor?: string;
   chestColor?: string;
   legsColor?: string;
+  // For multiplayer aiming
+  aimAngle?: number;
+}
+
+export interface Projectile {
+    id: string;
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    ownerId: string;
+    damage: number;
+    knockback: number;
+    life: number;
+    type: 'arrow';
+    width: number;
+    height: number;
+    angle: number;
 }
 
 export interface InputState {
@@ -183,7 +212,8 @@ export type NetworkMessageType =
   | 'ENEMY_SYNC'
   | 'ENEMY_HIT'
   | 'CHAT'
-  | 'TIME_SYNC';
+  | 'TIME_SYNC'
+  | 'PROJECTILE_SPAWN';
 
 export interface NetworkMessage {
   type: NetworkMessageType;
