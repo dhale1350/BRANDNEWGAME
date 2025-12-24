@@ -122,7 +122,7 @@ const drawParallax = (ctx: CanvasRenderingContext2D, camX: number, camY: number,
     ctx.restore();
 
     // Mountains Layers (Parallax)
-    // Layer 1: Farthest (Slowest)
+    // Optimized: Reduced detail and fixed path logic
     const layers = [
         { speed: 0.1, color: '#0f172a', height: 250, period: 400, offset: 0 },
         { speed: 0.25, color: '#1e293b', height: 180, period: 250, offset: 150 },
@@ -133,17 +133,19 @@ const drawParallax = (ctx: CanvasRenderingContext2D, camX: number, camY: number,
         ctx.fillStyle = layer.color;
         ctx.beginPath();
         // Calculate start based on camera to tile infinitely
+        // Optimization: Use larger steps for drawing to reduce lineTo calls
+        const step = 60; 
         const startX = Math.floor((camX * layer.speed) / 500) * 500 - 500;
         const endX = startX + (width / zoom) + 1000;
         
         ctx.moveTo((startX - camX * layer.speed), height/zoom);
         
-        for(let x = startX; x <= endX; x += 30) {
+        for(let x = startX; x <= endX; x += step) {
             const nx = x + layer.offset;
-            // Combine sines for "mountainous" look
-            const h = Math.sin(nx / layer.period) * 60 + Math.sin(nx / (layer.period * 0.4)) * 30 + layer.height;
+            // Simpler sine calculation
+            const h = Math.sin(nx / layer.period) * 60 + layer.height;
             const drawX = x - camX * layer.speed;
-            const drawY = (height/zoom) - h - (camY * 0.05); // slight Y parallax
+            const drawY = (height/zoom) - h - (camY * 0.05); 
             ctx.lineTo(drawX, drawY);
         }
         
@@ -184,7 +186,6 @@ class SoundEngine {
     }
     noise.buffer = buffer;
     
-    // Bandpass filter for swoosh sound
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = 800;
@@ -379,7 +380,6 @@ export const Game: React.FC<GameProps> = ({
   const mobileAimRef = useRef({ x: 0, y: 0, active: false });
   const targetReticleRef = useRef<{x: number, y: number, valid: boolean}>({x: 0, y: 0, valid: false});
 
-  // 0-29: Backpack, 30-32: Armor, 33-35: Accessories
   const inventoryRef = useRef<(InventoryItem | null)[]>(new Array(36).fill(null));
   const [inventoryState, setInventoryState] = useState<(InventoryItem | null)[]>(new Array(36).fill(null));
   const selectedSlotRef = useRef(0);
@@ -416,7 +416,6 @@ export const Game: React.FC<GameProps> = ({
   useEffect(() => { showInventoryRef.current = showInventory; }, [showInventory]);
   useEffect(() => { selectedSlotRef.current = selectedSlot; }, [selectedSlot]);
 
-  // Handle container open state sync
   useEffect(() => {
       if (!showInventory) setOpenContainer(null);
   }, [showInventory]);
@@ -668,7 +667,6 @@ export const Game: React.FC<GameProps> = ({
                         if(save.player.hairColor) p.hairColor = save.player.hairColor;
                         if(save.player.skinColor) p.skinColor = save.player.skinColor;
                         const loadedInv = save.player.inventory;
-                        // Increased inventory size to 36
                         inventoryRef.current = new Array(36).fill(null);
                         for(let i=0; i<Math.min(loadedInv.length, 36); i++) inventoryRef.current[i] = loadedInv[i];
                         setInventoryState([...inventoryRef.current]);
@@ -678,7 +676,6 @@ export const Game: React.FC<GameProps> = ({
                     } else {
                         const gen = generateWorld(worldSeedRef.current);
                         worldRef.current = gen.world; wallsRef.current = gen.walls;
-                        // Populate containers from generation
                         if (gen.containers) {
                             containersRef.current = new Map(Object.entries(gen.containers));
                         }
@@ -744,7 +741,6 @@ export const Game: React.FC<GameProps> = ({
       switch (msg.type) {
         case 'CHAT': setChatMessages(prev => [...prev, { id: Math.random().toString(), text: msg.payload.text, author: msg.payload.author, color: msg.payload.color, time: Date.now() }].slice(-50)); setTimeout(() => { if (chatMessagesRef.current) chatMessagesRef.current.scrollTop = chatMessagesRef.current.scrollHeight; }, 10); break;
         case 'REQUEST_INIT': 
-          // Convert map to object for sync
           const containersObj: Record<string, any[]> = {};
           containersRef.current.forEach((val, key) => { containersObj[key] = val; });
           conn.send({ type: 'INIT_SYNC', payload: { seed: worldSeedRef.current, changes: worldChangesRef.current, wallChanges: wallChangesRef.current, time: worldTimeRef.current, containers: containersObj }, senderId: playerRef.current.id }); 
@@ -754,7 +750,6 @@ export const Game: React.FC<GameProps> = ({
           worldSeedRef.current = msg.payload.seed; worldChangesRef.current = msg.payload.changes; wallChangesRef.current = msg.payload.wallChanges || []; worldTimeRef.current = msg.payload.time || 6000; setWorldTime(worldTimeRef.current);
           if (msg.payload.containers) containersRef.current = new Map(Object.entries(msg.payload.containers));
           const gen = generateWorld(worldSeedRef.current); worldRef.current = gen.world; wallsRef.current = gen.walls;
-          // Note: In multiplayer init, we ignore gen.containers because the host provides the authoritative state via msg.payload.containers above
           msg.payload.changes.forEach((c: WorldChange) => { if (c.x >= 0 && c.x < WORLD_WIDTH && c.y >= 0 && c.y < WORLD_HEIGHT) worldRef.current[c.y * WORLD_WIDTH + c.x] = c.b; });
           if (msg.payload.wallChanges) msg.payload.wallChanges.forEach((c: WallChange) => { if (c.x >= 0 && c.x < WORLD_WIDTH && c.y >= 0 && c.y < WORLD_HEIGHT) wallsRef.current[c.y * WORLD_WIDTH + c.x] = c.w; });
           setIsSyncing(false); finishLoading(); break;
@@ -776,7 +771,6 @@ export const Game: React.FC<GameProps> = ({
             const { x, y, items } = msg.payload; 
             const key = `${x},${y}`;
             containersRef.current.set(key, items);
-            // If current open container matches, update UI
             setOpenContainer(prev => (prev && prev.x === x && prev.y === y) ? { x, y, items } : prev);
             break; 
         }
@@ -832,7 +826,8 @@ export const Game: React.FC<GameProps> = ({
     const gp = navigator.getGamepads()[0];
     const input = inputRef.current;
     if (!gp) { if (input.isGamepadActive) input.isGamepadActive = false; return; }
-    const hasInput = gp.buttons.some(b => b.pressed) || Math.abs(gp.axes[0]) > 0.1 || Math.abs(gp.axes[1]) > 0.1;
+    // Check if any significant input is happening to prevent drift from locking mouse
+    const hasInput = gp.buttons.some(b => b.pressed) || Math.abs(gp.axes[0]) > 0.1 || Math.abs(gp.axes[1]) > 0.1 || Math.abs(gp.axes[2]) > 0.1 || Math.abs(gp.axes[3]) > 0.1;
     if (hasInput) input.isGamepadActive = true;
     if (!input.isGamepadActive) return;
     input.moveX = Math.abs(gp.axes[0]) > 0.1 ? gp.axes[0] : 0;
@@ -849,9 +844,7 @@ export const Game: React.FC<GameProps> = ({
       const input = inputRef.current; const p = playerRef.current; const world = worldRef.current; const walls = wallsRef.current; const inv = inventoryRef.current; const selectedItem = inv[selectedSlotRef.current]; const cam = cameraRef.current; const dev = devSettingsRef.current;
       let tx = 0, ty = 0; let isPressed = false; 
       
-      // Calculate Reach
       let reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
-      // Check for Extendo Grip accessory in slots 33, 34, 35
       for (let i = 33; i < 36; i++) {
         if (inv[i]?.accessoryProps?.type === 'grip') {
             reach += inv[i]!.accessoryProps!.effectValue;
@@ -876,12 +869,21 @@ export const Game: React.FC<GameProps> = ({
           } else { targetReticleRef.current.valid = false; }
       } else if (input.isGamepadActive) {
           const gp = navigator.getGamepads()[0];
-          if (gp) { const ax = gp.axes[2] || 0; const ay = gp.axes[3] || 0; if (Math.abs(ax) > 0.1 || Math.abs(ay) > 0.1) { cursorX = p.x + p.width/2 + ax * 150; cursorY = p.y + p.height/2 + ay * 150; tx = Math.floor(cursorX / TILE_SIZE); ty = Math.floor(cursorY / TILE_SIZE); isPressed = gp.buttons[7].pressed; hasTarget = true; } }
+          if (gp) { 
+              const ax = gp.axes[2] || 0; const ay = gp.axes[3] || 0; 
+              if (Math.abs(ax) > 0.1 || Math.abs(ay) > 0.1) { 
+                  cursorX = p.x + p.width/2 + ax * 150; cursorY = p.y + p.height/2 + ay * 150; 
+                  tx = Math.floor(cursorX / TILE_SIZE); ty = Math.floor(cursorY / TILE_SIZE); 
+                  // Button 7 is RT/R2, Button 2 is X/Square (Alternate interact)
+                  isPressed = gp.buttons[7].pressed || gp.buttons[2].pressed; 
+                  hasTarget = true; 
+              } 
+          }
       } else {
           cursorX = input.mouse.x / zoom + cam.x; cursorY = input.mouse.y / zoom + cam.y;
           tx = Math.floor(cursorX / TILE_SIZE); ty = Math.floor(cursorY / TILE_SIZE);
           isPressed = input.mouse.leftDown; hasTarget = true;
-          // PC Right Click for interaction
+          
           if (input.mouse.rightDown && now - lastInteractTimeRef.current > 300) {
               if (tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT) {
                   const b = world[ty * WORLD_WIDTH + tx];
@@ -901,12 +903,9 @@ export const Game: React.FC<GameProps> = ({
       const dist = hasTarget ? Math.sqrt(Math.pow((tx * TILE_SIZE + TILE_SIZE/2) - (p.x + p.width/2), 2) + Math.pow((ty * TILE_SIZE + TILE_SIZE/2) - (p.y + p.height/2), 2)) : 9999;
       if (dist > reach && !dev.infiniteReach && selectedItem?.toolProps?.type !== ToolType.BOW) isPressed = false;
 
-      // Handle Chest Interaction on Mobile (Tap/Click)
       if (isPressed && tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT) {
           const b = world[ty * WORLD_WIDTH + tx];
           if (b === BlockType.CHEST) {
-               // Only interact if not mining progress (first tap) OR not holding an Axe (unless trying to break)
-               // Simple logic: If holding AXE -> Break it. Else -> Open it.
                if (selectedItem?.toolProps?.type !== ToolType.AXE && now - lastInteractTimeRef.current > 300) {
                    const key = `${tx},${ty}`;
                    if (!containersRef.current.has(key)) containersRef.current.set(key, new Array(15).fill(null));
@@ -914,10 +913,13 @@ export const Game: React.FC<GameProps> = ({
                    setOpenContainer({ x: tx, y: ty, items });
                    setShowInventory(true);
                    lastInteractTimeRef.current = now;
-                   return; // Cancel mining action
+                   return;
                }
           }
       }
+
+      // Handle Attack Logic separate from Mining to allow simultaneous mining/hitting with some tools
+      let attemptMine = isPressed;
 
       if (isPressed) {
           if (selectedItem?.toolProps?.type === ToolType.BOW) {
@@ -960,7 +962,8 @@ export const Game: React.FC<GameProps> = ({
           }
       } else { miningRef.current.attackCooldown = Math.max(0, miningRef.current.attackCooldown - dt); }
       
-      if (isPressed) {
+      // Separate Mining Logic execution (runs even if attacking, standard for Terraria-likes)
+      if (attemptMine) {
           if (tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT) {
               const block = world[ty * WORLD_WIDTH + tx]; const wall = walls[ty * WORLD_WIDTH + tx];
               if (selectedItem && (selectedItem.isBlock || selectedItem.isWall) && block === BlockType.AIR) {
@@ -987,14 +990,13 @@ export const Game: React.FC<GameProps> = ({
                        miningRef.current.progress += speed * dt;
                        if (Math.random() < 0.2) spawnParticles(tx * TILE_SIZE + TILE_SIZE/2, ty * TILE_SIZE + TILE_SIZE/2, BLOCK_COLORS[block], 1);
                        if (miningRef.current.progress >= (stats?.hardness || 10)) {
-                           // Logic to prevent breaking chest if not empty
                            let canBreak = true;
                            if (block === BlockType.CHEST) {
                                const key = `${tx},${ty}`;
                                const contents = containersRef.current.get(key);
                                if (contents && contents.some(i => i !== null)) {
                                    canBreak = false;
-                                   sfx.playBlip(100, 0.2, 'sawtooth', settingsRef.current.audioVolume); // Error sound
+                                   sfx.playBlip(100, 0.2, 'sawtooth', settingsRef.current.audioVolume); 
                                } else {
                                    containersRef.current.delete(key);
                                }
@@ -1064,8 +1066,7 @@ export const Game: React.FC<GameProps> = ({
     if (miningRef.current.x >= 0) { const mx = miningRef.current.x; const my = miningRef.current.y; if (mx >= 0 && mx < WORLD_WIDTH && my >= 0 && my < WORLD_HEIGHT) { const b = worldRef.current[my * WORLD_WIDTH + mx]; if (b !== BlockType.AIR) { const maxH = BLOCK_MINING_STATS[b].hardness; drawCracks(ctx, mx * TILE_SIZE - camX, my * TILE_SIZE - camY, miningRef.current.progress, maxH); } } }
     if (effectiveIsMobile && targetReticleRef.current.valid) { const {x, y} = targetReticleRef.current; ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 2; ctx.strokeRect(x - camX, y - camY, TILE_SIZE, TILE_SIZE); }
 
-    // ... (Drawing Logic for entities identical to previous)
-    const drawP = (p: Entity) => { const rx = Math.floor(p.x - camX); const ry = Math.floor(p.y - camY); const cx = rx + p.width / 2; const cy = ry + p.height; ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 3, 0, 0, Math.PI*2); ctx.fill(); const stretch = Math.max(0.85, Math.min(1.15, 1 + Math.abs(p.vy) * 0.02 * (p.grounded ? -1 : 1))); const squash = 1 / stretch; ctx.scale(squash, stretch); const facingDir = p.facing === 'right' ? 1 : -1; const lean = (Math.abs(p.vx) > 0.1) ? (p.vx * 0.05) : 0; ctx.rotate(lean); ctx.scale(facingDir, 1); const isMoving = Math.abs(p.vx) > 0.1; const animTime = p.animTimer || 0; const walkCycle = animTime * 0.8; const bob = isMoving ? Math.abs(Math.sin(walkCycle * 2)) * 2 : 0; const breath = !isMoving ? Math.sin(time / 200) * 1 : 0; let helmetItem, chestItem, legsItem; if (p.id === playerRef.current.id) { helmetItem = inventoryRef.current[30]; chestItem = inventoryRef.current[31]; legsItem = inventoryRef.current[32]; } const pantColor = p.type === EntityType.GUIDE ? '#1e3a8a' : '#1e293b'; const drawLeg = (isBack: boolean) => { ctx.save(); ctx.translate(isBack ? -2 : 2, -10); ctx.rotate(isMoving ? (isBack ? -1 : 1) * Math.sin(walkCycle) * 0.6 : 0); ctx.fillStyle = pantColor; ctx.fillRect(-3, 0, 6, 12); if (legsItem && legsItem.armorProps) { const ap = getToolPalette(legsItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-3, 6, 6, 6); ctx.fillStyle = ap.light; ctx.fillRect(-2, 7, 2, 4); ctx.fillStyle = ap.dark; ctx.fillRect(-3, 4, 6, 2); } ctx.restore(); }; drawLeg(true); ctx.save(); ctx.translate(0, -bob + breath); drawLeg(false); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-6, -22, 12, 12); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-6, -22, 12, 12); ctx.fillStyle = ap.dark; ctx.fillRect(-2, -22, 4, 12); ctx.fillStyle = ap.light; ctx.fillRect(-5, -20, 2, 4); ctx.fillRect(3, -20, 2, 4); ctx.fillStyle = ap.outline; ctx.fillRect(-6, -11, 12, 2); } else { ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-6, -12, 12, 2); } ctx.save(); ctx.translate(0, -22); ctx.rotate(-lean * 0.5 + (isMoving ? Math.sin(walkCycle * 2) * 0.05 : 0)); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-8, -16, 16, 16); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); if (!helmetItem) { ctx.fillStyle = p.hairColor || settingsRef.current.playerHair; ctx.fillRect(-9, -19, 18, 5); ctx.fillRect(-9, -19, 5, 14); ctx.fillRect(8, -14, 1, 4); } else if (helmetItem.armorProps) { const ap = getToolPalette(helmetItem.armorProps.tier); const isDiamond = helmetItem.armorProps.tier >= 4; ctx.fillStyle = ap.base; ctx.fillRect(-9, -19, 18, 14); ctx.fillRect(-9, -19, 18, 6); if (isDiamond) { ctx.fillStyle = ap.dark; ctx.fillRect(-5, -11, 10, 8); ctx.fillStyle = ap.base; ctx.fillRect(-1, -11, 2, 8); ctx.fillRect(-5, -8, 10, 2); ctx.fillStyle = ap.light; ctx.fillRect(-11, -20, 2, 6); ctx.fillRect(9, -20, 2, 6); } else { ctx.clearRect(-4, -13, 8, 8); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-4, -13, 8, 8); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); ctx.fillStyle = ap.base; ctx.fillRect(-1, -13, 2, 4); } ctx.fillStyle = ap.light; ctx.fillRect(-6, -18, 4, 2); } if (p.name) { ctx.save(); ctx.scale(facingDir, 1); ctx.rotate(-lean + (lean*0.5)); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-p.name.length * 3 - 4, -40, p.name.length * 6 + 8, 14); ctx.fillStyle = 'white'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(p.name, 0, -30); ctx.restore(); } ctx.restore(); ctx.save(); ctx.translate(0, -18); const heldItem = p.id === playerRef.current.id ? inventoryRef.current[selectedSlotRef.current] : (p as any).heldItem; const isSwinging = (p.id === playerRef.current.id) ? miningRef.current.swing > 0 : (p as any).isSwinging; const isBow = heldItem?.toolProps?.type === ToolType.BOW; let armAngle = 0; let itemRotation = 0; if (isBow) { if (p.aimAngle !== undefined) { let aim = p.aimAngle; if (p.facing === 'left') aim = Math.PI - aim; armAngle = aim; } else { armAngle = 0; } } else if (isSwinging) { const sProgress = (p.id === playerRef.current.id) ? miningRef.current.swing : 0.5; const startAngle = -Math.PI * 0.8; const endAngle = Math.PI * 0.5; armAngle = startAngle + (endAngle - startAngle) * sProgress; itemRotation = armAngle + Math.PI/4; if (p.id === playerRef.current.id && sProgress > 0.1 && sProgress < 0.9) { ctx.save(); ctx.rotate(armAngle); ctx.translate(0, 10); ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 40, -0.5, 0.5); ctx.lineTo(0,0); const grd = ctx.createRadialGradient(0, 0, 10, 0, 0, 40); grd.addColorStop(0, 'rgba(255, 255, 255, 0)'); grd.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)'); grd.addColorStop(1, 'rgba(255, 255, 255, 0)'); ctx.fillStyle = grd; ctx.fill(); ctx.restore(); } } else { armAngle = isMoving ? -Math.sin(walkCycle) * 0.8 : 0.1; } ctx.rotate(armAngle); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-3, -2, 6, 8); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-4, -3, 8, 5); ctx.fillStyle = ap.outline; ctx.fillRect(-4, -3, 8, 1); } ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-2, 6, 4, 6); if (heldItem) { ctx.translate(0, 10); if (!isBow && !isSwinging) ctx.rotate(Math.PI / 2); if (heldItem.isBlock) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawBlock(ctx, 0, 0, heldItem.blockType as BlockType, 0, 0); ctx.restore(); } else if (heldItem.isWall) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawWall(ctx, 0, 0, heldItem.wallType as WallType, 0, 0); ctx.restore(); } else { const tier = heldItem.toolProps?.tier ?? 0; const type = heldItem.toolProps?.type as ToolType; let gripOffset = 0; if (type === ToolType.SWORD) gripOffset = -2.5; else if (type === ToolType.PICKAXE) gripOffset = -2.5; else if (type === ToolType.AXE) gripOffset = -2.5; else if (type === ToolType.SHOVEL) gripOffset = -1.5; const drawScale = 0.8; const pixelSize = 2 * drawScale; if (isSwinging && !isBow) { ctx.rotate(-Math.PI/2); } drawTool(ctx, type, tier, 0, gripOffset * pixelSize, drawScale); } } ctx.restore(); ctx.restore(); ctx.restore(); if (devSettingsRef.current.showHitboxes) { ctx.strokeStyle = '#f00'; ctx.lineWidth = 1; ctx.strokeRect(rx, ry, p.width, p.height); } };
+    const drawP = (p: Entity) => { const rx = Math.floor(p.x - camX); const ry = Math.floor(p.y - camY); const cx = rx + p.width / 2; const cy = ry + p.height; ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 3, 0, 0, Math.PI*2); ctx.fill(); const stretch = Math.max(0.85, Math.min(1.15, 1 + Math.abs(p.vy) * 0.02 * (p.grounded ? -1 : 1))); const squash = 1 / stretch; ctx.scale(squash, stretch); const facingDir = p.facing === 'right' ? 1 : -1; const lean = (Math.abs(p.vx) > 0.1) ? (p.vx * 0.05) : 0; ctx.rotate(lean); ctx.scale(facingDir, 1); const isMoving = Math.abs(p.vx) > 0.1; const animTime = p.animTimer || 0; const walkCycle = animTime * 0.8; const bob = isMoving ? Math.abs(Math.sin(walkCycle * 2)) * 2 : 0; const breath = !isMoving ? Math.sin(time / 200) * 1 : 0; let helmetItem, chestItem, legsItem; if (p.id === playerRef.current.id) { helmetItem = inventoryRef.current[30]; chestItem = inventoryRef.current[31]; legsItem = inventoryRef.current[32]; } const pantColor = p.type === EntityType.GUIDE ? '#1e3a8a' : '#1e293b'; const drawLeg = (isBack: boolean) => { ctx.save(); ctx.translate(isBack ? -2 : 2, -10); ctx.rotate(isMoving ? (isBack ? -1 : 1) * Math.sin(walkCycle) * 0.6 : 0); ctx.fillStyle = pantColor; ctx.fillRect(-3, 0, 6, 12); if (legsItem && legsItem.armorProps) { const ap = getToolPalette(legsItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-3, 6, 6, 6); ctx.fillStyle = ap.light; ctx.fillRect(-2, 7, 2, 4); ctx.fillStyle = ap.dark; ctx.fillRect(-3, 4, 6, 2); } ctx.restore(); }; drawLeg(true); ctx.save(); ctx.translate(0, -bob + breath); drawLeg(false); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-6, -22, 12, 12); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-6, -22, 12, 12); ctx.fillStyle = ap.dark; ctx.fillRect(-2, -22, 4, 12); ctx.fillStyle = ap.light; ctx.fillRect(-5, -20, 2, 4); ctx.fillRect(3, -20, 2, 4); ctx.fillStyle = ap.outline; ctx.fillRect(-6, -11, 12, 2); } else { ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-6, -12, 12, 2); } ctx.save(); ctx.translate(0, -22); ctx.rotate(-lean * 0.5 + (isMoving ? Math.sin(walkCycle * 2) * 0.05 : 0)); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-8, -16, 16, 16); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); if (!helmetItem) { ctx.fillStyle = p.hairColor || settingsRef.current.playerHair; ctx.fillRect(-9, -19, 18, 5); ctx.fillRect(-9, -19, 5, 14); ctx.fillRect(8, -14, 1, 4); } else if (helmetItem.armorProps) { const ap = getToolPalette(helmetItem.armorProps.tier); const isDiamond = helmetItem.armorProps.tier >= 4; ctx.fillStyle = ap.base; ctx.fillRect(-9, -19, 18, 14); ctx.fillRect(-9, -19, 18, 6); if (isDiamond) { ctx.fillStyle = ap.dark; ctx.fillRect(-5, -11, 10, 8); ctx.fillStyle = ap.base; ctx.fillRect(-1, -11, 2, 8); ctx.fillStyle = ap.light; ctx.fillRect(-11, -20, 2, 6); ctx.fillRect(9, -20, 2, 6); } else { ctx.clearRect(-4, -13, 8, 8); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-4, -13, 8, 8); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); ctx.fillStyle = ap.base; ctx.fillRect(-1, -13, 2, 4); } ctx.fillStyle = ap.light; ctx.fillRect(-6, -18, 4, 2); } if (p.name) { ctx.save(); ctx.scale(facingDir, 1); ctx.rotate(-lean + (lean*0.5)); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-p.name.length * 3 - 4, -40, p.name.length * 6 + 8, 14); ctx.fillStyle = 'white'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(p.name, 0, -30); ctx.restore(); } ctx.restore(); ctx.save(); ctx.translate(0, -18); const heldItem = p.id === playerRef.current.id ? inventoryRef.current[selectedSlotRef.current] : (p as any).heldItem; const isSwinging = (p.id === playerRef.current.id) ? miningRef.current.swing > 0 : (p as any).isSwinging; const isBow = heldItem?.toolProps?.type === ToolType.BOW; let armAngle = 0; let itemRotation = 0; if (isBow) { if (p.aimAngle !== undefined) { let aim = p.aimAngle; if (p.facing === 'left') aim = Math.PI - aim; armAngle = aim; } else { armAngle = 0; } } else if (isSwinging) { const sProgress = (p.id === playerRef.current.id) ? miningRef.current.swing : 0.5; const startAngle = -Math.PI * 0.8; const endAngle = Math.PI * 0.5; armAngle = startAngle + (endAngle - startAngle) * sProgress; itemRotation = armAngle + Math.PI/4; if (p.id === playerRef.current.id && sProgress > 0.1 && sProgress < 0.9) { ctx.save(); ctx.rotate(armAngle); ctx.translate(0, 10); ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 40, -0.5, 0.5); ctx.lineTo(0,0); const grd = ctx.createRadialGradient(0, 0, 10, 0, 0, 40); grd.addColorStop(0, 'rgba(255, 255, 255, 0)'); grd.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)'); grd.addColorStop(1, 'rgba(255, 255, 255, 0)'); ctx.fillStyle = grd; ctx.fill(); ctx.restore(); } } else { armAngle = isMoving ? -Math.sin(walkCycle) * 0.8 : 0.1; } ctx.rotate(armAngle); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-3, -2, 6, 8); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-4, -3, 8, 5); ctx.fillStyle = ap.outline; ctx.fillRect(-4, -3, 8, 1); } ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-2, 6, 4, 6); if (heldItem) { ctx.translate(0, 10); if (!isBow && !isSwinging) ctx.rotate(Math.PI / 2); if (heldItem.isBlock) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawBlock(ctx, 0, 0, heldItem.blockType as BlockType, 0, 0); ctx.restore(); } else if (heldItem.isWall) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawWall(ctx, 0, 0, heldItem.wallType as WallType, 0, 0); ctx.restore(); } else { const tier = heldItem.toolProps?.tier ?? 0; const type = heldItem.toolProps?.type as ToolType; let gripOffset = 0; if (type === ToolType.SWORD) gripOffset = -2.5; else if (type === ToolType.PICKAXE) gripOffset = -2.5; else if (type === ToolType.AXE) gripOffset = -2.5; else if (type === ToolType.SHOVEL) gripOffset = -1.5; const drawScale = 0.8; const pixelSize = 2 * drawScale; if (isSwinging && !isBow) { ctx.rotate(-Math.PI/2); } drawTool(ctx, type, tier, 0, gripOffset * pixelSize, drawScale); } } ctx.restore(); ctx.restore(); ctx.restore(); if (devSettingsRef.current.showHitboxes) { ctx.strokeStyle = '#f00'; ctx.lineWidth = 1; ctx.strokeRect(rx, ry, p.width, p.height); } };
     const drawE = (e: Entity) => {
         if (e.isDead) return; const rx = Math.floor(e.x - camX); const ry = Math.floor(e.y - camY); ctx.save(); ctx.translate(rx + e.width/2, ry + e.height);
         if (e.iFrames && e.iFrames > 0) { ctx.scale(1.1 - Math.sin(time/20)*0.1, 0.9 + Math.sin(time/20)*0.1); ctx.filter = 'brightness(200%) sepia(100%) hue-rotate(-50deg) saturate(600%)'; }
@@ -1090,28 +1091,52 @@ export const Game: React.FC<GameProps> = ({
   useEffect(() => { if (roomId && !isLoaded) { const timer = setTimeout(() => { setLoadingError("Connection timed out. Host may be offline."); }, 15000); return () => clearTimeout(timer); } }, [roomId, isLoaded]);
   useEffect(() => { if (isInitializingRef.current) return; isInitializingRef.current = true; const requestedId = roomId ? undefined : hostPeerId; let peer: any = null; try { peer = new (window as any).Peer(requestedId, { debug: 1, config: { iceServers: [ { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }, { urls: 'stun:stun3.l.google.com:19302' }, { urls: 'stun:stun4.l.google.com:19302' } ], iceTransportPolicy: 'all' } }); peerRef.current = peer; } catch (e) { setLoadingError("Network Init Failed"); isInitializingRef.current = false; return; } peer.on('error', (err: any) => { console.warn('PeerJS Error:', err); if (err.type === 'peer-unavailable') { setLoadingError(`Session "${roomId}" not found.`); } else { setLoadingError(`Network Error: ${err.type || 'Unknown'}`); } isInitializingRef.current = false; }); peer.on('open', (id: string) => { setMyAssignedId(id); playerRef.current.id = id; if (!roomId) finishLoading(); else setTimeout(() => { if (peerRef.current && !peerRef.current.destroyed) setupConnection(peerRef.current.connect(roomId, { reliable: true })); }, 800); isInitializingRef.current = false; }); peer.on('connection', setupConnection); return () => { broadcast('PLAYER_LEAVE', {}); if (peerRef.current) { try { peerRef.current.destroy(); } catch(e) {} } isInitializingRef.current = false; }; }, [roomId, hostPeerId, setupConnection, broadcast, finishLoading]); 
 
+  // Fix: Improved pointer input handling with coordinate scaling support
+  const handlePointer = (e: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, type: 'down' | 'move' | 'up') => {
+      // If Gamepad was active, moving mouse disables it immediately
+      if (inputRef.current.isGamepadActive && type === 'move') {
+          inputRef.current.isGamepadActive = false;
+      }
+
+      if (effectiveIsMobile && type !== 'up') {
+          // Touch logic handled in overlay mainly, but fallback here
+          if ('isPrimary' in e && e.isPrimary) {
+               inputRef.current.mouse.leftDown = type === 'down';
+               const rect = containerRef.current?.getBoundingClientRect();
+               const canvas = canvasRef.current;
+               if(rect && canvas) { 
+                   const scaleX = canvas.width / rect.width;
+                   const scaleY = canvas.height / rect.height;
+                   inputRef.current.mouse.x = (e.clientX - rect.left) * scaleX; 
+                   inputRef.current.mouse.y = (e.clientY - rect.top) * scaleY; 
+               }
+          }
+      } else {
+          // PC logic
+          if ('button' in e && e.button === 2) inputRef.current.mouse.rightDown = type === 'down';
+          if ('button' in e && e.button === 0) inputRef.current.mouse.leftDown = type === 'down';
+          
+          if (type === 'move' || type === 'down') {
+             const rect = containerRef.current?.getBoundingClientRect();
+             const canvas = canvasRef.current;
+             if(rect && canvas) { 
+                 const scaleX = canvas.width / rect.width;
+                 const scaleY = canvas.height / rect.height;
+                 inputRef.current.mouse.x = (e.clientX - rect.left) * scaleX; 
+                 inputRef.current.mouse.y = (e.clientY - rect.top) * scaleY; 
+             }
+          }
+      }
+  };
+
   if (!isLoaded) return ( <div className="w-full h-screen flex flex-col items-center justify-center bg-[#05080f] text-white"> {loadingError ? ( <div className="flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-4"> <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-2"> <XCircle size={32} className="text-red-500" /> </div> <div className="text-center max-w-md px-6"> <h3 className="text-xl font-black mb-2">CONNECTION FAILED</h3> <p className="text-zinc-400 mb-6 font-mono text-xs">{loadingError}</p> <button onClick={onExit} className="bg-white text-black px-6 py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors shadow-lg active:scale-95"> Return to Menu </button> </div> </div> ) : ( <> <Loader2 className="animate-spin mb-4 text-blue-500" size={32} /> <span className="font-bold tracking-widest animate-pulse text-xs text-zinc-400">{roomId ? 'JOINING SECURE FREQUENCY...' : 'GENERATING TERRAIN...'}</span> {roomId && <button onClick={onExit} className="mt-12 text-[10px] font-bold text-zinc-600 hover:text-red-400 border-b border-transparent hover:border-red-400/50 transition-all uppercase tracking-widest">Cancel Connection</button>} </> )} </div> );
 
   return (
     <div ref={containerRef} className="relative w-full h-full overflow-hidden touch-none select-none bg-[#0b0e14]" onContextMenu={(e) => e.preventDefault()} 
-        onPointerDown={(e) => { 
-             // Touch devices handle interaction via MobileControls overlay mainly.
-             // This fallback ensures "Tap to Mine" works in the main viewport area if controls don't catch it.
-             if (effectiveIsMobile) {
-                // If it's not on a control element (controls stop propagation)
-                if (e.isPrimary) {
-                   inputRef.current.mouse.leftDown = true;
-                   const rect = containerRef.current?.getBoundingClientRect();
-                   if(rect) { inputRef.current.mouse.x = e.clientX - rect.left; inputRef.current.mouse.y = e.clientY - rect.top; }
-                }
-             } else {
-                if (e.isPrimary && e.button === 0) { inputRef.current.mouse.leftDown = true; const rect = containerRef.current?.getBoundingClientRect(); if(rect) { inputRef.current.mouse.x = e.clientX - rect.left; inputRef.current.mouse.y = e.clientY - rect.top; } }
-                if (e.button === 2) inputRef.current.mouse.rightDown = true;
-             }
-        }} 
-        onPointerMove={(e) => { if (e.isPrimary) { const rect = containerRef.current?.getBoundingClientRect(); if(rect) { inputRef.current.mouse.x = e.clientX - rect.left; inputRef.current.mouse.y = e.clientY - rect.top; } } }} 
-        onPointerUp={(e) => { if (e.isPrimary) inputRef.current.mouse.leftDown = false; if (e.button === 2) inputRef.current.mouse.rightDown = false; }} 
-        onPointerCancel={() => { inputRef.current.mouse.leftDown = false; }}
+        onPointerDown={(e) => handlePointer(e, 'down')}
+        onPointerMove={(e) => handlePointer(e, 'move')}
+        onPointerUp={(e) => handlePointer(e, 'up')}
+        onPointerCancel={(e) => handlePointer(e, 'up')}
     >
       <canvas ref={canvasRef} className="block w-full h-full touch-none" />
       
@@ -1227,8 +1252,6 @@ export const Game: React.FC<GameProps> = ({
               }
           }}
           onTransfer={(fromIndex, fromLoc, toIndex, toLoc) => {
-              // Handle logic for complex transfers if needed, but for now parent handles updating via specific callbacks
-              // This is a bit duplicative with onSwap/onUpdateSlot, let's consolidate.
               const inv = [...inventoryRef.current];
               const ext = openContainer ? [...openContainer.items] : [];
               
@@ -1241,7 +1264,6 @@ export const Game: React.FC<GameProps> = ({
               sourceList[fromIndex] = destItem;
               destList[toIndex] = sourceItem;
               
-              // Apply updates
               inventoryRef.current = inv;
               setInventoryState([...inv]);
               

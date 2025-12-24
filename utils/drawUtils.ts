@@ -1,7 +1,5 @@
 
 
-
-
 import { BlockType, ToolType, WallType, ArmorType } from '../types';
 import { BLOCK_COLORS, WALL_COLORS, TILE_SIZE } from '../constants';
 
@@ -33,55 +31,51 @@ export const texRandom = (x: number, y: number, seed: number = 0) => {
     return (Math.abs(Math.sin(n)) * 10000) % 1;
 };
 
+// Optimization: Removed ctx.save() and ctx.restore() for block drawing to improve rendering performance.
 export const drawWall = (ctx: CanvasRenderingContext2D, x: number, y: number, type: WallType, wx: number, wy: number) => {
-    ctx.save();
-    ctx.translate(x, y);
     ctx.fillStyle = WALL_COLORS[type] || '#000000';
-    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 
     // Darken walls globally
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
-    ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 
     if (type === WallType.WOOD) {
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(0, 0, 2, TILE_SIZE);
-        ctx.fillRect(16, 0, 2, TILE_SIZE);
+        ctx.fillRect(x, y, 2, TILE_SIZE);
+        ctx.fillRect(x + 16, y, 2, TILE_SIZE);
     } else if (type === WallType.BRICK) {
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(0, 8, TILE_SIZE, 2);
-        ctx.fillRect(0, 24, TILE_SIZE, 2);
+        ctx.fillRect(x, y + 8, TILE_SIZE, 2);
+        ctx.fillRect(x, y + 24, TILE_SIZE, 2);
     } else if (type === WallType.STONE || type === WallType.SANDSTONE || type === WallType.SNOW) {
         if (texRandom(wx, wy, 5) > 0.6) {
             ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.fillRect(4, 4, 8, 8);
+            ctx.fillRect(x + 4, y + 4, 8, 8);
         }
     }
-
-    ctx.restore();
 }
 
 export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, type: BlockType, wx: number, wy: number) => {
-    ctx.save();
-    ctx.translate(x, y);
+    // Optimization: Direct coordinate drawing without transformations
     
     // Draw Base
     if (type === BlockType.GRASS) {
          ctx.fillStyle = BLOCK_COLORS[BlockType.DIRT];
-         ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+         ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
     } else {
          ctx.fillStyle = BLOCK_COLORS[type] || '#ff00ff';
-         ctx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+         ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
     }
 
     // Bevel / Depth Effect for Hard Blocks
     if ([BlockType.STONE, BlockType.BRICK, BlockType.COAL, BlockType.IRON, BlockType.GOLD, BlockType.DIAMOND, BlockType.WOOD, BlockType.SANDSTONE, BlockType.ICE].includes(type)) {
         ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        ctx.fillRect(0, 0, TILE_SIZE, 2); // Top Highlight
-        ctx.fillRect(0, 0, 2, TILE_SIZE); // Left Highlight
+        ctx.fillRect(x, y, TILE_SIZE, 2); // Top Highlight
+        ctx.fillRect(x, y, 2, TILE_SIZE); // Left Highlight
         ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(0, TILE_SIZE-2, TILE_SIZE, 2); // Bottom Shadow
-        ctx.fillRect(TILE_SIZE-2, 0, 2, TILE_SIZE); // Right Shadow
+        ctx.fillRect(x, y + TILE_SIZE-2, TILE_SIZE, 2); // Bottom Shadow
+        ctx.fillRect(x + TILE_SIZE-2, y, 2, TILE_SIZE); // Right Shadow
     }
 
     // Procedural Textures
@@ -91,18 +85,18 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
             for(let i=0; i<3; i++) {
                 const rx = (texRandom(wx, wy, i) * TILE_SIZE) % TILE_SIZE;
                 const ry = 10 + (texRandom(wx, wy, i+10) * (TILE_SIZE-10));
-                ctx.fillRect(rx, ry, 3, 3);
+                ctx.fillRect(x + rx, y + ry, 3, 3);
             }
             ctx.fillStyle = '#4caf50'; 
-            ctx.fillRect(0, 0, TILE_SIZE, 8);
+            ctx.fillRect(x, y, TILE_SIZE, 8);
             for(let i=0; i<8; i++) {
                 if (texRandom(wx, wy, i+20) > 0.4) {
                     const h = 4 + texRandom(wx, wy, i+30) * 6;
-                    ctx.fillRect(i*4, 6, 3, h);
+                    ctx.fillRect(x + i*4, y + 6, 3, h);
                 }
             }
             ctx.fillStyle = '#81c784';
-            ctx.fillRect(2, 2, 2, 2); ctx.fillRect(10, 3, 2, 2); ctx.fillRect(20, 1, 2, 2);
+            ctx.fillRect(x + 2, y + 2, 2, 2); ctx.fillRect(x + 10, y + 3, 2, 2); ctx.fillRect(x + 20, y + 1, 2, 2);
             break;
             
         case BlockType.DIRT:
@@ -110,66 +104,66 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
                 ctx.fillStyle = 'rgba(0,0,0,0.15)'; 
                 const rx = (texRandom(wx, wy, i) * (TILE_SIZE-4));
                 const ry = (texRandom(wx, wy, i+10) * (TILE_SIZE-4));
-                ctx.fillRect(rx, ry, 4, 4);
+                ctx.fillRect(x + rx, y + ry, 4, 4);
                 
                 ctx.fillStyle = 'rgba(255,255,255,0.05)'; 
                 const rx2 = (texRandom(wx, wy, i+20) * (TILE_SIZE-2));
                 const ry2 = (texRandom(wx, wy, i+30) * (TILE_SIZE-2));
-                ctx.fillRect(rx2, ry2, 2, 2);
+                ctx.fillRect(x + rx2, y + ry2, 2, 2);
             }
             break;
 
         case BlockType.STONE:
             ctx.fillStyle = '#546e7a'; 
-            if (texRandom(wx, wy, 1) > 0.3) ctx.fillRect(2, 2, 10, 8);
-            if (texRandom(wx, wy, 2) > 0.3) ctx.fillRect(16, 16, 12, 10);
+            if (texRandom(wx, wy, 1) > 0.3) ctx.fillRect(x + 2, y + 2, 10, 8);
+            if (texRandom(wx, wy, 2) > 0.3) ctx.fillRect(x + 16, y + 16, 12, 10);
             ctx.fillStyle = '#78909c'; 
-            ctx.fillRect(20, 4, 6, 4);
-            ctx.fillRect(4, 20, 6, 4);
+            ctx.fillRect(x + 20, y + 4, 6, 4);
+            ctx.fillRect(x + 4, y + 20, 6, 4);
             break;
         
         case BlockType.SANDSTONE:
             ctx.fillStyle = '#bfa588'; 
-            ctx.fillRect(0, 5, TILE_SIZE, 2);
-            ctx.fillRect(0, 15, TILE_SIZE, 2);
-            ctx.fillRect(0, 25, TILE_SIZE, 2);
+            ctx.fillRect(x, y + 5, TILE_SIZE, 2);
+            ctx.fillRect(x, y + 15, TILE_SIZE, 2);
+            ctx.fillRect(x, y + 25, TILE_SIZE, 2);
             break;
 
         case BlockType.WOOD:
             ctx.fillStyle = '#3e2723'; 
-            ctx.fillRect(4, 0, 2, TILE_SIZE);
-            ctx.fillRect(12, 0, 2, TILE_SIZE);
-            ctx.fillRect(20, 0, 2, TILE_SIZE);
-            ctx.fillRect(28, 0, 2, TILE_SIZE);
+            ctx.fillRect(x + 4, y, 2, TILE_SIZE);
+            ctx.fillRect(x + 12, y, 2, TILE_SIZE);
+            ctx.fillRect(x + 20, y, 2, TILE_SIZE);
+            ctx.fillRect(x + 28, y, 2, TILE_SIZE);
             break;
 
         case BlockType.LEAVES:
         case BlockType.PINE_LEAVES:
             ctx.fillStyle = type === BlockType.LEAVES ? '#2e7d32' : '#0f3d22'; 
-            ctx.fillRect(2, 2, 10, 10);
-            ctx.fillRect(18, 14, 10, 10);
+            ctx.fillRect(x + 2, y + 2, 10, 10);
+            ctx.fillRect(x + 18, y + 14, 10, 10);
             ctx.fillStyle = type === BlockType.LEAVES ? '#66bb6a' : '#14532d'; 
-            ctx.fillRect(14, 4, 6, 6);
-            ctx.fillRect(4, 18, 6, 6);
+            ctx.fillRect(x + 14, y + 4, 6, 6);
+            ctx.fillRect(x + 4, y + 18, 6, 6);
             break;
             
         case BlockType.CACTUS:
              ctx.fillStyle = '#365314'; 
-             ctx.fillRect(4, 4, 2, 8); ctx.fillRect(12, 18, 2, 8); ctx.fillRect(24, 6, 2, 8);
+             ctx.fillRect(x + 4, y + 4, 2, 8); ctx.fillRect(x + 12, y + 18, 2, 8); ctx.fillRect(x + 24, y + 6, 2, 8);
              ctx.fillStyle = 'rgba(0,0,0,0.1)';
-             ctx.fillRect(6, 0, 4, TILE_SIZE);
-             ctx.fillRect(18, 0, 4, TILE_SIZE);
+             ctx.fillRect(x + 6, y, 4, TILE_SIZE);
+             ctx.fillRect(x + 18, y, 4, TILE_SIZE);
              break;
 
         case BlockType.BRICK:
             ctx.fillStyle = '#b71c1c'; 
-            ctx.fillRect(0,0,TILE_SIZE,TILE_SIZE);
+            ctx.fillRect(x, y,TILE_SIZE,TILE_SIZE);
             ctx.fillStyle = '#ef9a9a'; 
-            ctx.fillRect(0, 0, TILE_SIZE, 2);
-            ctx.fillRect(0, 16, TILE_SIZE, 2);
-            ctx.fillRect(16, 0, 2, 16);
-            ctx.fillRect(8, 16, 2, 16); 
-            ctx.fillRect(24, 16, 2, 16);
+            ctx.fillRect(x, y, TILE_SIZE, 2);
+            ctx.fillRect(x, y + 16, TILE_SIZE, 2);
+            ctx.fillRect(x + 16, y, 2, 16);
+            ctx.fillRect(x + 8, y + 16, 2, 16); 
+            ctx.fillRect(x + 24, y + 16, 2, 16);
             break;
             
         case BlockType.COAL:
@@ -177,18 +171,18 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
         case BlockType.GOLD:
         case BlockType.DIAMOND:
             ctx.fillStyle = '#546e7a'; 
-            ctx.fillRect(2, 2, 8, 8); ctx.fillRect(18, 18, 8, 8);
+            ctx.fillRect(x + 2, y + 2, 8, 8); ctx.fillRect(x + 18, y + 18, 8, 8);
             ctx.fillStyle = type === BlockType.COAL ? '#212121' : 
                            type === BlockType.IRON ? '#d7ccc8' : 
                            type === BlockType.GOLD ? '#ffd740' : '#40c4ff';
             ctx.beginPath();
-            ctx.moveTo(10, 10); ctx.lineTo(16, 6); ctx.lineTo(22, 10); ctx.lineTo(16, 16); ctx.fill();
-            ctx.fillRect(6, 22, 6, 6);
-            ctx.fillRect(22, 6, 5, 5);
+            ctx.moveTo(x + 10, y + 10); ctx.lineTo(x + 16, y + 6); ctx.lineTo(x + 22, y + 10); ctx.lineTo(x + 16, y + 16); ctx.fill();
+            ctx.fillRect(x + 6, y + 22, 6, 6);
+            ctx.fillRect(x + 22, y + 6, 5, 5);
             if (type === BlockType.GOLD || type === BlockType.DIAMOND) {
                 ctx.fillStyle = '#ffffff';
                 ctx.globalAlpha = 0.7;
-                ctx.fillRect(14, 8, 4, 4);
+                ctx.fillRect(x + 14, y + 8, 4, 4);
                 ctx.globalAlpha = 1.0;
             }
             break;
@@ -198,7 +192,7 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
             for(let i=0; i<10; i++) {
                 const rx = (texRandom(wx, wy, i*2) * (TILE_SIZE-2));
                 const ry = (texRandom(wx, wy, i*3) * (TILE_SIZE-2));
-                ctx.fillRect(rx, ry, 2, 2);
+                ctx.fillRect(x + rx, y + ry, 2, 2);
             }
             break;
             
@@ -207,52 +201,50 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
             for(let i=0; i<10; i++) {
                 const rx = (texRandom(wx, wy, i*2) * (TILE_SIZE-2));
                 const ry = (texRandom(wx, wy, i*3) * (TILE_SIZE-2));
-                ctx.fillRect(rx, ry, 2, 2);
+                ctx.fillRect(x + rx, y + ry, 2, 2);
             }
             break;
             
         case BlockType.ICE:
             ctx.fillStyle = 'rgba(255,255,255,0.4)';
             ctx.beginPath();
-            ctx.moveTo(0,0); ctx.lineTo(10, TILE_SIZE);
-            ctx.moveTo(15,0); ctx.lineTo(25, TILE_SIZE);
+            ctx.moveTo(x,y); ctx.lineTo(x + 10, y + TILE_SIZE);
+            ctx.moveTo(x + 15,y); ctx.lineTo(x + 25, y + TILE_SIZE);
             ctx.stroke();
             break;
             
         case BlockType.BEDROCK:
             ctx.fillStyle = '#000000';
             ctx.beginPath();
-            ctx.moveTo(0,0); ctx.lineTo(10, 10); ctx.lineTo(20, 0); ctx.lineTo(32, 10); ctx.lineTo(32, 32); ctx.lineTo(0, 32);
+            ctx.moveTo(x,y); ctx.lineTo(x + 10, y + 10); ctx.lineTo(x + 20, y); ctx.lineTo(x + 32, y + 10); ctx.lineTo(x + 32, y + 32); ctx.lineTo(x, y + 32);
             ctx.fill();
             ctx.fillStyle = '#212121';
-            ctx.fillRect(5, 20, 10, 5);
-            ctx.fillRect(20, 15, 5, 10);
+            ctx.fillRect(x + 5, y + 20, 10, 5);
+            ctx.fillRect(x + 20, y + 15, 5, 10);
             break;
 
         case BlockType.GLASS:
              ctx.fillStyle = 'rgba(224, 247, 250, 0.2)';
-             ctx.fillRect(0,0,TILE_SIZE,TILE_SIZE);
+             ctx.fillRect(x,y,TILE_SIZE,TILE_SIZE);
              ctx.lineWidth = 2;
              ctx.strokeStyle = '#b2ebf2';
-             ctx.strokeRect(2, 2, TILE_SIZE-4, TILE_SIZE-4);
+             ctx.strokeRect(x + 2, y + 2, TILE_SIZE-4, TILE_SIZE-4);
              ctx.fillStyle = 'rgba(255,255,255,0.6)';
              ctx.beginPath();
-             ctx.moveTo(6, 26); ctx.lineTo(12, 26); ctx.lineTo(26, 12); ctx.lineTo(26, 6); 
+             ctx.moveTo(x + 6, y + 26); ctx.lineTo(x + 12, y + 26); ctx.lineTo(x + 26, y + 12); ctx.lineTo(x + 26, y + 6); 
              ctx.fill();
              break;
 
         case BlockType.CHEST:
              ctx.fillStyle = '#8d6e63'; 
-             ctx.fillRect(2, 8, 28, 24); 
+             ctx.fillRect(x + 2, y + 8, 28, 24); 
              ctx.fillStyle = '#5d4037'; 
-             ctx.fillRect(2, 8, 28, 2); 
-             ctx.fillRect(13, 16, 6, 8); 
+             ctx.fillRect(x + 2, y + 8, 28, 2); 
+             ctx.fillRect(x + 13, y + 16, 6, 8); 
              ctx.fillStyle = '#ffca28'; 
-             ctx.fillRect(14, 18, 4, 4);
+             ctx.fillRect(x + 14, y + 18, 4, 4);
              break;
     }
-
-    ctx.restore();
 };
 
 // --- TOOL DRAWING ---
@@ -283,9 +275,13 @@ export const drawTool = (
     if (type === ToolType.BOW) {
         // Draw Bow
         // Curve
-        dp(1, -5, handle); dp(2, -4, handle); dp(3, -3, handle);
-        dp(3, -2, handle); dp(3, -1, handle); dp(3, 0, handle); // Grip area
-        dp(3, 1, handle); dp(3, 2, handle); dp(2, 3, handle); dp(1, 4, handle);
+        // Use palette base for bow limbs if not wood (tier > 0)
+        const limbColor = tier > 0 ? p.base : handle;
+        const limbDark = tier > 0 ? p.dark : handleDark;
+
+        dp(1, -5, limbColor); dp(2, -4, limbColor); dp(3, -3, limbColor);
+        dp(3, -2, limbColor); dp(3, -1, limbColor); dp(3, 0, limbColor); // Grip area
+        dp(3, 1, limbColor); dp(3, 2, limbColor); dp(2, 3, limbColor); dp(1, 4, limbColor);
         
         // String
         ctx.fillStyle = 'rgba(255,255,255,0.6)';

@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { DevSettings, EntityType, BlockType, InventoryItem, TestInterface, Entity, WallType } from '../types';
 import { 
@@ -133,9 +134,16 @@ export const DevTools: React.FC<DevToolsProps> = ({
         if(typeof v === 'number' && v !== 0) items.push(CREATE_ITEM.wall(v));
     });
     // Tools/Armor
-    items.push(CREATE_ITEM.wood_pickaxe(), CREATE_ITEM.wood_sword(), CREATE_ITEM.iron_pickaxe(), CREATE_ITEM.iron_sword(), CREATE_ITEM.diamond_pickaxe(), CREATE_ITEM.diamond_sword());
+    items.push(
+        CREATE_ITEM.wood_pickaxe(), CREATE_ITEM.wood_sword(), CREATE_ITEM.wood_axe(), CREATE_ITEM.wood_shovel(), CREATE_ITEM.wooden_bow(),
+        CREATE_ITEM.stone_pickaxe(), CREATE_ITEM.stone_sword(), CREATE_ITEM.stone_axe(), CREATE_ITEM.stone_shovel(), CREATE_ITEM.stone_bow(),
+        CREATE_ITEM.iron_pickaxe(), CREATE_ITEM.iron_sword(), CREATE_ITEM.iron_axe(), CREATE_ITEM.iron_shovel(), CREATE_ITEM.iron_bow(),
+        CREATE_ITEM.gold_pickaxe(), CREATE_ITEM.gold_sword(), CREATE_ITEM.gold_axe(), CREATE_ITEM.gold_shovel(), CREATE_ITEM.gold_bow(),
+        CREATE_ITEM.diamond_pickaxe(), CREATE_ITEM.diamond_sword(), CREATE_ITEM.diamond_axe(), CREATE_ITEM.diamond_shovel(), CREATE_ITEM.diamond_bow()
+    );
     items.push(CREATE_ITEM.iron_helmet(), CREATE_ITEM.iron_chestplate(), CREATE_ITEM.iron_leggings());
     items.push(CREATE_ITEM.diamond_helmet(), CREATE_ITEM.diamond_chestplate(), CREATE_ITEM.diamond_leggings());
+    items.push(CREATE_ITEM.extendo_grip());
     
     return items;
   }, []);
@@ -148,7 +156,6 @@ export const DevTools: React.FC<DevToolsProps> = ({
   useEffect(() => {
       const handleMove = (e: MouseEvent | TouchEvent) => {
           if (!isDragging) return;
-          // Prevent default to stop scrolling on mobile while dragging window
           if (e.cancelable) e.preventDefault();
 
           let cx, cy;
@@ -208,7 +215,6 @@ export const DevTools: React.FC<DevToolsProps> = ({
 
   if (!isOpen) return null;
 
-  // Minimized View
   if (isMinimized) {
       return (
         <div 
@@ -236,13 +242,11 @@ export const DevTools: React.FC<DevToolsProps> = ({
       );
   }
 
-  // Expanded View
   return (
     <div 
         style={{ left: pos.x, top: pos.y }}
         className="fixed z-[100] w-[95vw] sm:w-[360px] bg-[#0b0e14]/95 border border-white/10 rounded-2xl shadow-2xl backdrop-blur-xl flex flex-col overflow-hidden font-sans max-h-[80vh] animate-in zoom-in-95 duration-200"
     >
-      {/* Header / Drag Handle */}
       <div 
         onMouseDown={handleStartDrag}
         onTouchStart={handleStartDrag}
@@ -272,7 +276,6 @@ export const DevTools: React.FC<DevToolsProps> = ({
         </div>
       </div>
 
-      {/* Monitor Strip */}
       <div className="bg-black/40 p-3 border-b border-white/5 space-y-2 shrink-0">
           <div className="flex justify-between text-[10px] font-mono text-zinc-500 font-bold uppercase">
               <span>Performance</span>
@@ -285,7 +288,6 @@ export const DevTools: React.FC<DevToolsProps> = ({
           </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex border-b border-white/5 overflow-x-auto no-scrollbar bg-[#0f1115] shrink-0">
         {[
             { id: 'general', icon: <Zap size={14}/>, label: 'Cheats' },
@@ -405,6 +407,7 @@ export const DevTools: React.FC<DevToolsProps> = ({
             </div>
         )}
 
+        {/* Other tabs remain unchanged... */}
         {activeTab === 'entities' && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-2">
                 <div className="space-y-2">
