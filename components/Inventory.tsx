@@ -1,8 +1,10 @@
 
+
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { InventoryItem, ArmorType } from '../types';
 import { CRAFTING_RECIPES, CraftingRecipe } from '../constants';
-import { Box, X, Info, Zap, Hammer, Sword, Shield, Battery, ArrowRightLeft, MousePointerClick, Archive } from 'lucide-react';
+import { Box, X, Info, Zap, Hammer, Sword, Shield, Battery, ArrowRightLeft, MousePointerClick, Archive, Sparkles } from 'lucide-react';
 import { ItemIcon } from './ItemIcon';
 
 interface InventoryProps {
@@ -154,11 +156,19 @@ export const Inventory: React.FC<InventoryProps> = ({
                  )}
 
                  <div className="flex flex-col sm:flex-row gap-6 h-full">
-                     {/* Armor Column - Horizontal on mobile, Vertical on desktop */}
+                     {/* Armor & Accessories Column */}
                      <div className="flex sm:flex-col gap-3 shrink-0 justify-center bg-black/20 p-3 rounded-2xl border border-white/5 h-min">
+                         {/* Armor */}
                          {renderSlot(30, inventory, 'player', <Shield size={18} />, 'Head')}
                          {renderSlot(31, inventory, 'player', <Shield size={18} />, 'Chest')}
                          {renderSlot(32, inventory, 'player', <Shield size={18} />, 'Legs')}
+                         
+                         <div className="w-full h-px bg-white/10 my-1"></div>
+
+                         {/* Accessories */}
+                         {renderSlot(33, inventory, 'player', <Sparkles size={18} />, 'Acc 1')}
+                         {renderSlot(34, inventory, 'player', <Sparkles size={18} />, 'Acc 2')}
+                         {renderSlot(35, inventory, 'player', <Sparkles size={18} />, 'Acc 3')}
                      </div>
                      
                      {/* Main Grid */}
@@ -214,7 +224,7 @@ export const Inventory: React.FC<InventoryProps> = ({
                     <div className="flex-1 min-w-0">
                         <h3 className="text-lg font-black text-white uppercase tracking-wide truncate">{displayItem.name}</h3>
                         <div className="flex items-center gap-x-4 gap-y-2 text-[10px] font-bold uppercase text-zinc-500 tracking-wider flex-wrap mt-1">
-                            <span className="bg-white/5 px-2 py-0.5 rounded text-zinc-400 whitespace-nowrap">{displayItem.isBlock ? 'Block' : displayItem.armorProps ? 'Armor' : 'Tool'}</span>
+                            <span className="bg-white/5 px-2 py-0.5 rounded text-zinc-400 whitespace-nowrap">{displayItem.isBlock ? 'Block' : displayItem.armorProps ? 'Armor' : displayItem.accessoryProps ? 'Accessory' : 'Tool'}</span>
                             {displayItem.toolProps && (
                                 <>
                                     {displayItem.toolProps.damage && <span className="flex items-center gap-1 text-red-400 whitespace-nowrap"><Sword size={12}/> {displayItem.toolProps.damage} DMG</span>}
@@ -227,9 +237,10 @@ export const Inventory: React.FC<InventoryProps> = ({
                                 </>
                             )}
                             {displayItem.armorProps && <span className="flex items-center gap-1 text-emerald-400 whitespace-nowrap"><Shield size={12}/> {displayItem.armorProps.defense} DEF</span>}
+                            {displayItem.accessoryProps && <span className="flex items-center gap-1 text-purple-400 whitespace-nowrap"><Sparkles size={12}/> {displayItem.accessoryProps.effectValue} PWR</span>}
                         </div>
                         <p className="text-xs text-zinc-600 italic mt-2 line-clamp-1">
-                            {displayItem.isBlock ? "Use to build structures." : displayItem.armorProps ? `Equip to increase defense.` : `Essential tool for survival.`}
+                            {displayItem.accessoryProps?.description || (displayItem.isBlock ? "Use to build structures." : displayItem.armorProps ? `Equip to increase defense.` : `Essential tool for survival.`)}
                         </p>
                     </div>
                 </>

@@ -1,6 +1,7 @@
 
 
 
+
 import { BlockType, ToolType, WallType, ArmorType } from '../types';
 import { BLOCK_COLORS, WALL_COLORS, TILE_SIZE } from '../constants';
 
@@ -416,6 +417,39 @@ export const drawArmor = (ctx: CanvasRenderingContext2D, type: ArmorType, tier: 
         dp(2, -1, p.base); dp(3, -1, p.base);
         dp(2, 0, p.dark); dp(3, 0, p.dark);
         dp(2, 1, p.base); dp(3, 1, p.base); 
+    }
+
+    ctx.restore();
+};
+
+export const drawAccessory = (ctx: CanvasRenderingContext2D, type: string, x: number, y: number, scale: number = 1) => {
+    const pixel = 2 * scale;
+    ctx.save();
+    ctx.translate(x, y);
+
+    const dp = (gx: number, gy: number, color: string) => {
+        ctx.fillStyle = color;
+        ctx.fillRect(gx * pixel, gy * pixel, pixel, pixel);
+    };
+
+    if (type === 'grip') {
+        const metal = '#cfd8dc';
+        const darkMetal = '#546e7a';
+        const accent = '#f44336'; // Red piston
+
+        // Draw mechanical arm/claw
+        dp(-3, 0, darkMetal); dp(-2, 0, metal); dp(-1, 0, darkMetal);
+        dp(-3, 1, darkMetal); dp(-2, 1, metal); dp(-1, 1, darkMetal);
+        
+        // Piston shaft
+        dp(0, 0, '#37474f'); dp(1, 0, accent); dp(2, 0, accent);
+        
+        // Claw
+        dp(3, -2, metal); dp(4, -2, metal);
+        dp(3, -1, metal); dp(5, -1, metal);
+        dp(3, 0, darkMetal); dp(4, 0, metal);
+        dp(3, 1, metal); dp(5, 1, metal);
+        dp(3, 2, metal); dp(4, 2, metal);
     }
 
     ctx.restore();

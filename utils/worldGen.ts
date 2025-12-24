@@ -1,7 +1,7 @@
 
 
-import { BlockType, WallType } from '../types';
-import { WORLD_HEIGHT, WORLD_WIDTH } from '../constants';
+import { BlockType, WallType, InventoryItem, ToolType, ArmorType } from '../types';
+import { WORLD_HEIGHT, WORLD_WIDTH, CREATE_ITEM } from '../constants';
 import { noise2D, seedNoise } from './noise';
 
 // --- SEEDED RNG ---
@@ -41,7 +41,96 @@ function getBiome(x: number): BiomeType {
     return 'forest';
 }
 
+// --- LOOT GENERATION ---
+
+function generateLoot(): (InventoryItem | null)[] {
+    const items: (InventoryItem | null)[] = new Array(15).fill(null);
+    let count = 3 + Math.floor(random() * 5); // 3 to 7 items
+    
+    const possibleLoot = [
+        { item: () => CREATE_ITEM.block(BlockType.WOOD), chance: 0.8, min: 10, max: 50 },
+        { item: () => CREATE_ITEM.block(BlockType.STONE), chance: 0.8, min: 10, max: 50 },
+        { item: () => CREATE_ITEM.block(BlockType.IRON), chance: 0.4, min: 2, max: 8 },
+        { item: () => CREATE_ITEM.block(BlockType.GOLD), chance: 0.2, min: 2, max: 6 },
+        { item: () => CREATE_ITEM.block(BlockType.DIAMOND), chance: 0.05, min: 1, max: 3 },
+        { item: () => CREATE_ITEM.iron_pickaxe(), chance: 0.15, min: 1, max: 1 },
+        { item: () => CREATE_ITEM.iron_sword(), chance: 0.15, min: 1, max: 1 },
+        { item: () => CREATE_ITEM.wooden_bow(), chance: 0.2, min: 1, max: 1 },
+        { item: () => CREATE_ITEM.extendo_grip(), chance: 0.08, min: 1, max: 1 }, // Rare accessory
+        { item: () => CREATE_ITEM.block(BlockType.GRASS), chance: 0.5, min: 5, max: 15 },
+    ];
+
+    for(let i=0; i<count; i++) {
+        const slot = Math.floor(random() * 15);
+        if (items[slot]) continue;
+
+        // Pick item
+        let picked = null;
+        let attempts = 0;
+        while (!picked && attempts < 10) {
+            const candidate = possibleLoot[Math.floor(random() * possibleLoot.length)];
+            if (random() < candidate.chance) {
+                const qty = candidate.min + Math.floor(random() * (candidate.max - candidate.min + 1));
+                picked = { ...candidate.item(), count: qty };
+                if (picked.toolProps || picked.accessoryProps) picked.count = 1; // Unstackables
+            }
+            attempts++;
+        }
+        
+        if (picked) items[slot] = picked;
+    }
+    
+    return items;
+}
+
 // --- STRUCTURE GENERATORS ---
+
+function generateStructure(
+    world: Uint8Array, 
+    walls: Uint8Array, 
+    x: number, 
+    y: number, 
+    type: 'ruin' | 'cabin',
+    containers: Record<string, (InventoryItem | null)[]>
+) {
+    const w = 10;
+    const h = 6;
+    
+    // Clear area
+    for(let dy = 0; dy < h; dy++) {
+        for(let dx = 0; dx < w; dx++) {
+            setBlock(world, x + dx, y - dy, BlockType.AIR);
+            if (type === 'cabin') {
+                setWall(walls, x + dx, y - dy, WallType.WOOD);
+            } else if (type === 'ruin') {
+                if (random() > 0.3) setWall(walls, x + dx, y - dy, WallType.STONE);
+            }
+        }
+    }
+
+    // Build Shell
+    for(let dx = 0; dx < w; dx++) {
+        setBlock(world, x + dx, y, type === 'cabin' ? BlockType.WOOD : BlockType.STONE); // Floor
+        setBlock(world, x + dx, y - h + 1, type === 'cabin' ? BlockType.WOOD : BlockType.STONE); // Ceiling
+    }
+    for(let dy = 0; dy < h; dy++) {
+        setBlock(world, x, y - dy, type === 'cabin' ? BlockType.WOOD : BlockType.STONE); // Left Wall
+        setBlock(world, x + w - 1, y - dy, type === 'cabin' ? BlockType.WOOD : BlockType.STONE); // Right Wall
+    }
+
+    // Doorway
+    setBlock(world, x, y - 1, BlockType.AIR);
+    setBlock(world, x, y - 2, BlockType.AIR);
+    
+    // Chest
+    const chestX = x + Math.floor(w/2) + Math.floor(random() * 2);
+    const chestY = y - 1;
+    setBlock(world, chestX, chestY, BlockType.CHEST);
+    
+    // Populate Chest
+    const loot = generateLoot();
+    containers[`${chestX},${chestY}`] = loot;
+}
 
 function generateTree(world: Uint8Array, x: number, y: number, biome: BiomeType) {
     if (biome === 'desert') {
@@ -71,7 +160,7 @@ function generateTree(world: Uint8Array, x: number, y: number, biome: BiomeType)
         let radius = 3;
         for(let ly = leafStart; ly >= leafEnd; ly--) {
             for(let lx = -radius; lx <= radius; lx++) {
-                if (Math.abs(lx) + Math.abs(ly - leafStart) * 0.3 < radius + 1) { // Cone shape logic roughly
+                if (Math.abs(lx) + Math.abs(ly - leafStart) * 0.3 < radius + 1) { 
                     setBlock(world, x + lx, ly, BlockType.PINE_LEAVES);
                 }
             }
@@ -100,18 +189,16 @@ function generateTree(world: Uint8Array, x: number, y: number, biome: BiomeType)
     setBlock(world, x, crownBase - 3, BlockType.LEAVES);
 }
 
-// ... (Houses/Ruins/Towers kept same logic, maybe swap blocks if inside biome)
-// For brevity, skipping biome-specific structure skinning to keep file size manageable, default wood/stone looks okay everywhere.
-
 // --- MAIN GENERATOR ---
 
-export function generateWorld(seed: number): { world: Uint8Array, walls: Uint8Array } {
+export function generateWorld(seed: number): { world: Uint8Array, walls: Uint8Array, containers: Record<string, (InventoryItem | null)[]> } {
   seedNoise(seed);
   setRngSeed(seed); 
 
   const world = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT);
   const walls = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT);
   const heightMap = new Int32Array(WORLD_WIDTH);
+  const containers: Record<string, (InventoryItem | null)[]> = {};
   
   const groundLevel = Math.floor(WORLD_HEIGHT * 0.4); 
   const mountainScale = 0.015; 
@@ -139,7 +226,7 @@ export function generateWorld(seed: number): { world: Uint8Array, walls: Uint8Ar
         // Sub-surface
         else if (y < surfaceY + 5) {
             if (biome === 'snow') {
-                block = BlockType.SNOW; // Or Ice if deeper?
+                block = BlockType.SNOW; 
                 wall = WallType.SNOW; 
             } else if (biome === 'desert') {
                 block = BlockType.SAND;
@@ -188,8 +275,27 @@ export function generateWorld(seed: number): { world: Uint8Array, walls: Uint8Ar
     }
   }
 
-  // PASS 2: STRUCTURES (Simplified to skip biome checks for now, just spawning them)
-  // ... (Structure generation code same as before but using getBiome if needed later)
+  // PASS 2: STRUCTURES
+  // Randomly place structures
+  for (let i = 0; i < 15; i++) { // Attempt 15 structures
+      const x = Math.floor(random() * (WORLD_WIDTH - 20)) + 10;
+      const surfaceY = heightMap[x];
+      
+      // Determine type and depth
+      const isUnderground = random() > 0.6;
+      let sy = surfaceY;
+      
+      if (isUnderground) {
+          sy = surfaceY + 20 + Math.floor(random() * 40); // Deep underground
+          if (sy < WORLD_HEIGHT - 10) {
+              generateStructure(world, walls, x, sy, 'cabin', containers);
+          }
+      } else {
+          // Surface Ruin
+          // Find flat-ish spot or just embed it
+          generateStructure(world, walls, x, sy, 'ruin', containers);
+      }
+  }
   
   // PASS 3: VEGETATION
   const takenSpots = new Set<number>();
@@ -218,5 +324,5 @@ export function generateWorld(seed: number): { world: Uint8Array, walls: Uint8Ar
       }
   }
 
-  return { world, walls };
+  return { world, walls, containers };
 }

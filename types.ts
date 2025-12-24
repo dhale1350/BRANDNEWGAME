@@ -1,4 +1,5 @@
 
+
 export enum GameState {
   MENU = 'menu',
   PLAYING = 'playing',
@@ -115,6 +116,12 @@ export interface ToolProps {
   swingType?: 'arc' | 'stab' | 'shoot'; // New property for animation style
 }
 
+export interface AccessoryProps {
+  type: 'grip' | 'boots' | 'ring';
+  effectValue: number;
+  description: string;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -130,6 +137,7 @@ export interface InventoryItem {
     defense: number;
     tier: number;
   };
+  accessoryProps?: AccessoryProps;
 }
 
 export interface Entity {

@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { 
   BlockType, WallType, Entity, InputState, InventoryItem, ToolType, NetworkMessage, InputMode, GameSettings, EntityType, DevSettings, TestInterface, ArmorType, Projectile 
@@ -378,8 +379,9 @@ export const Game: React.FC<GameProps> = ({
   const mobileAimRef = useRef({ x: 0, y: 0, active: false });
   const targetReticleRef = useRef<{x: number, y: number, valid: boolean}>({x: 0, y: 0, valid: false});
 
-  const inventoryRef = useRef<(InventoryItem | null)[]>(new Array(33).fill(null));
-  const [inventoryState, setInventoryState] = useState<(InventoryItem | null)[]>(new Array(33).fill(null));
+  // 0-29: Backpack, 30-32: Armor, 33-35: Accessories
+  const inventoryRef = useRef<(InventoryItem | null)[]>(new Array(36).fill(null));
+  const [inventoryState, setInventoryState] = useState<(InventoryItem | null)[]>(new Array(36).fill(null));
   const selectedSlotRef = useRef(0);
   const [selectedSlot, setSelectedSlotState] = useState(0);
   const [showInventory, setShowInventory] = useState(false);
@@ -666,8 +668,9 @@ export const Game: React.FC<GameProps> = ({
                         if(save.player.hairColor) p.hairColor = save.player.hairColor;
                         if(save.player.skinColor) p.skinColor = save.player.skinColor;
                         const loadedInv = save.player.inventory;
-                        inventoryRef.current = new Array(33).fill(null);
-                        for(let i=0; i<Math.min(loadedInv.length, 33); i++) inventoryRef.current[i] = loadedInv[i];
+                        // Increased inventory size to 36
+                        inventoryRef.current = new Array(36).fill(null);
+                        for(let i=0; i<Math.min(loadedInv.length, 36); i++) inventoryRef.current[i] = loadedInv[i];
                         setInventoryState([...inventoryRef.current]);
                         if (save.containers) {
                             containersRef.current = new Map(Object.entries(save.containers));
@@ -675,6 +678,10 @@ export const Game: React.FC<GameProps> = ({
                     } else {
                         const gen = generateWorld(worldSeedRef.current);
                         worldRef.current = gen.world; wallsRef.current = gen.walls;
+                        // Populate containers from generation
+                        if (gen.containers) {
+                            containersRef.current = new Map(Object.entries(gen.containers));
+                        }
                         const spawnX = WORLD_WIDTH / 2;
                         let spawnY = 0;
                         while (spawnY < WORLD_HEIGHT && worldRef.current[spawnY * WORLD_WIDTH + Math.floor(spawnX)] === BlockType.AIR) spawnY++;
@@ -692,6 +699,9 @@ export const Game: React.FC<GameProps> = ({
                 } else {
                     const gen = generateWorld(worldSeedRef.current);
                     worldRef.current = gen.world; wallsRef.current = gen.walls;
+                    if (gen.containers) {
+                        containersRef.current = new Map(Object.entries(gen.containers));
+                    }
                     const spawnX = WORLD_WIDTH / 2;
                     let spawnY = 0;
                     while (spawnY < WORLD_HEIGHT && worldRef.current[spawnY * WORLD_WIDTH + Math.floor(spawnX)] === BlockType.AIR) spawnY++;
@@ -744,6 +754,7 @@ export const Game: React.FC<GameProps> = ({
           worldSeedRef.current = msg.payload.seed; worldChangesRef.current = msg.payload.changes; wallChangesRef.current = msg.payload.wallChanges || []; worldTimeRef.current = msg.payload.time || 6000; setWorldTime(worldTimeRef.current);
           if (msg.payload.containers) containersRef.current = new Map(Object.entries(msg.payload.containers));
           const gen = generateWorld(worldSeedRef.current); worldRef.current = gen.world; wallsRef.current = gen.walls;
+          // Note: In multiplayer init, we ignore gen.containers because the host provides the authoritative state via msg.payload.containers above
           msg.payload.changes.forEach((c: WorldChange) => { if (c.x >= 0 && c.x < WORLD_WIDTH && c.y >= 0 && c.y < WORLD_HEIGHT) worldRef.current[c.y * WORLD_WIDTH + c.x] = c.b; });
           if (msg.payload.wallChanges) msg.payload.wallChanges.forEach((c: WallChange) => { if (c.x >= 0 && c.x < WORLD_WIDTH && c.y >= 0 && c.y < WORLD_HEIGHT) wallsRef.current[c.y * WORLD_WIDTH + c.x] = c.w; });
           setIsSyncing(false); finishLoading(); break;
@@ -836,7 +847,17 @@ export const Game: React.FC<GameProps> = ({
 
   const updateInteraction = useCallback((now: number, dt: number) => {
       const input = inputRef.current; const p = playerRef.current; const world = worldRef.current; const walls = wallsRef.current; const inv = inventoryRef.current; const selectedItem = inv[selectedSlotRef.current]; const cam = cameraRef.current; const dev = devSettingsRef.current;
-      let tx = 0, ty = 0; let isPressed = false; const reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
+      let tx = 0, ty = 0; let isPressed = false; 
+      
+      // Calculate Reach
+      let reach = dev.infiniteReach ? 9999 : (selectedItem?.toolProps?.attackRange || 180);
+      // Check for Extendo Grip accessory in slots 33, 34, 35
+      for (let i = 33; i < 36; i++) {
+        if (inv[i]?.accessoryProps?.type === 'grip') {
+            reach += inv[i]!.accessoryProps!.effectValue;
+        }
+      }
+
       let cursorX = 0, cursorY = 0; let hasTarget = false;
 
       if (effectiveIsMobile) {
@@ -1233,7 +1254,14 @@ export const Game: React.FC<GameProps> = ({
           }}
           onSwap={(a, b) => { 
               const inv = inventoryRef.current;
-              const isValid = (idx: number, item: InventoryItem | null) => { if (!item) return true; if (idx === 30) return item.armorProps?.type === ArmorType.HELMET; if (idx === 31) return item.armorProps?.type === ArmorType.CHESTPLATE; if (idx === 32) return item.armorProps?.type === ArmorType.LEGGINGS; return true; };
+              const isValid = (idx: number, item: InventoryItem | null) => { 
+                  if (!item) return true; 
+                  if (idx === 30) return item.armorProps?.type === ArmorType.HELMET; 
+                  if (idx === 31) return item.armorProps?.type === ArmorType.CHESTPLATE; 
+                  if (idx === 32) return item.armorProps?.type === ArmorType.LEGGINGS; 
+                  if (idx >= 33 && idx <= 35) return !!item.accessoryProps;
+                  return true; 
+              };
               if ((a >= 30 && !isValid(a, inv[b])) || (b >= 30 && !isValid(b, inv[a]))) return; 
               const tmp = inv[a]; inv[a] = inv[b]; inv[b] = tmp; setInventoryState([...inv]); 
           }} 

@@ -188,6 +188,11 @@ export const CREATE_ITEM = {
     id: 'diamond_leggings', name: 'Diamond Leggings', count: 1, maxStack: 1, isBlock: false,
     armorProps: { type: ArmorType.LEGGINGS, defense: 4, tier: 4 }
   }),
+  // ACCESSORIES
+  extendo_grip: (): InventoryItem => ({
+      id: 'extendo_grip', name: 'Extendo Grip', count: 1, maxStack: 1, isBlock: false,
+      accessoryProps: { type: 'grip', effectValue: 120, description: "Increases block reach by 120px." }
+  }),
   block: (type: BlockType): InventoryItem => {
     const name = BlockType[type] || 'Unknown';
     return {
@@ -307,6 +312,12 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
     name: 'Diamond Leggings',
     result: CREATE_ITEM.diamond_leggings,
     ingredients: [{ id: `block_${BlockType.DIAMOND}`, count: 12 }]
+  },
+  {
+    id: 'recipe_extendo_grip',
+    name: 'Extendo Grip',
+    result: CREATE_ITEM.extendo_grip,
+    ingredients: [{ id: `block_${BlockType.IRON}`, count: 10 }, { id: `block_${BlockType.WOOD}`, count: 10 }]
   },
   {
     id: 'recipe_glass',

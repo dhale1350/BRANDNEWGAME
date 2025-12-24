@@ -1,7 +1,8 @@
 
+
 import React, { useRef, useEffect } from 'react';
 import { InventoryItem } from '../types';
-import { drawBlock, drawTool, drawWall, drawArmor } from '../utils/drawUtils';
+import { drawBlock, drawTool, drawWall, drawArmor, drawAccessory } from '../utils/drawUtils';
 import { TILE_SIZE } from '../constants';
 
 export const ItemIcon = ({ item, size = 32 }: { item: InventoryItem, size?: number }) => {
@@ -91,6 +92,23 @@ export const ItemIcon = ({ item, size = 32 }: { item: InventoryItem, size?: numb
              ctx.shadowOffsetX = 2;
              ctx.shadowOffsetY = 2;
              
+             ctx.restore();
+        } else if (item.accessoryProps) {
+             // Draw Accessory
+             ctx.save();
+             ctx.translate(cx, cy);
+             
+             const baseSize = 32;
+             const scale = size / baseSize;
+             ctx.scale(scale, scale);
+             
+             drawAccessory(ctx, item.accessoryProps.type, 0, 0, 1.5);
+
+             ctx.globalCompositeOperation = 'destination-over';
+             ctx.shadowColor = 'rgba(0,0,0,0.5)';
+             ctx.shadowBlur = 8;
+             ctx.shadowOffsetX = 2;
+             ctx.shadowOffsetY = 2;
              ctx.restore();
         }
 
