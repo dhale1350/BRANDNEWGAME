@@ -1,5 +1,6 @@
 
 
+
 import { BlockType, ToolType, WallType, ArmorType } from '../types';
 import { BLOCK_COLORS, WALL_COLORS, TILE_SIZE } from '../constants';
 
@@ -237,6 +238,16 @@ export const drawBlock = (ctx: CanvasRenderingContext2D, x: number, y: number, t
              ctx.beginPath();
              ctx.moveTo(6, 26); ctx.lineTo(12, 26); ctx.lineTo(26, 12); ctx.lineTo(26, 6); 
              ctx.fill();
+             break;
+
+        case BlockType.CHEST:
+             ctx.fillStyle = '#8d6e63'; 
+             ctx.fillRect(2, 8, 28, 24); 
+             ctx.fillStyle = '#5d4037'; 
+             ctx.fillRect(2, 8, 28, 2); 
+             ctx.fillRect(13, 16, 6, 8); 
+             ctx.fillStyle = '#ffca28'; 
+             ctx.fillRect(14, 18, 4, 4);
              break;
     }
 

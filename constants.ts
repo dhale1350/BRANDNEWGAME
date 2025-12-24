@@ -1,6 +1,5 @@
 
 
-
 import { BlockType, WallType, InventoryItem, ToolType, ArmorType } from './types';
 
 export const TILE_SIZE = 32;
@@ -48,6 +47,7 @@ export const BLOCK_COLORS: Record<BlockType, string> = {
   [BlockType.PINE_LEAVES]: '#14532d',
   [BlockType.WATER]: 'rgba(66, 165, 245, 0.6)',
   [BlockType.LAVA]: '#ef4444',
+  [BlockType.CHEST]: '#8d6e63',
 };
 
 export const WALL_COLORS: Record<WallType, string> = {
@@ -110,48 +110,58 @@ export const BLOCK_MINING_STATS: Record<BlockType, { hardness: number; requiredT
   [BlockType.PINE_LEAVES]: { hardness: 2, requiredTool: ToolType.AXE, minTier: 0 },
   [BlockType.WATER]: { hardness: Infinity, requiredTool: ToolType.NONE, minTier: 0 },
   [BlockType.LAVA]: { hardness: Infinity, requiredTool: ToolType.NONE, minTier: 0 },
+  [BlockType.CHEST]: { hardness: 15, requiredTool: ToolType.AXE, minTier: 0 },
 };
 
 export const CREATE_ITEM = {
   wood_pickaxe: (): InventoryItem => ({
     id: 'wood_pickaxe', name: 'Wood Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 0.45, tier: 0, swingSpeed: 0.06, durability: 60, maxDurability: 60 }
+    toolProps: { 
+      type: ToolType.PICKAXE, efficiency: 0.45, tier: 0, swingSpeed: 0.04, 
+      durability: 60, maxDurability: 60, swingType: 'arc', damage: 4, knockback: 3, attackRange: 48 
+    }
   }),
   wood_sword: (): InventoryItem => ({
     id: 'wood_sword', name: 'Wood Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 0, damage: 15, knockback: 6,
-      swingSpeed: 0.08, attackRange: 55, scale: 1.4, durability: 60, maxDurability: 60
+      swingSpeed: 0.05, attackRange: 60, scale: 1.4, durability: 60, maxDurability: 60, swingType: 'arc'
     }
   }),
   wooden_bow: (): InventoryItem => ({
     id: 'wooden_bow', name: 'Wooden Bow', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.BOW, efficiency: 1, tier: 0, damage: 12, knockback: 4,
-      swingSpeed: 0.03, attackRange: 400, scale: 1.0, durability: 100, maxDurability: 100, projectileSpeed: 16
+      swingSpeed: 0.03, attackRange: 400, scale: 1.0, durability: 100, maxDurability: 100, projectileSpeed: 16, swingType: 'shoot'
     }
   }),
   iron_sword: (): InventoryItem => ({
     id: 'iron_sword', name: 'Iron Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 2, damage: 32, knockback: 8,
-      swingSpeed: 0.12, attackRange: 75, scale: 1.6, durability: 250, maxDurability: 250
+      swingSpeed: 0.07, attackRange: 70, scale: 1.6, durability: 250, maxDurability: 250, swingType: 'arc'
     }
   }),
   diamond_sword: (): InventoryItem => ({
     id: 'diamond_sword', name: 'Diamond Sword', count: 1, maxStack: 1, isBlock: false,
     toolProps: { 
       type: ToolType.SWORD, efficiency: 1, tier: 4, damage: 65, knockback: 10,
-      swingSpeed: 0.18, attackRange: 90, scale: 1.9, durability: 1000, maxDurability: 1000
+      swingSpeed: 0.09, attackRange: 80, scale: 1.9, durability: 1000, maxDurability: 1000, swingType: 'arc'
     }
   }),
   iron_pickaxe: (): InventoryItem => ({
     id: 'iron_pickaxe', name: 'Iron Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 1.25, tier: 2, swingSpeed: 0.10, durability: 250, maxDurability: 250 }
+    toolProps: { 
+      type: ToolType.PICKAXE, efficiency: 1.25, tier: 2, swingSpeed: 0.06, 
+      durability: 250, maxDurability: 250, swingType: 'arc', damage: 9, knockback: 4, attackRange: 55
+    }
   }),
   diamond_pickaxe: (): InventoryItem => ({
     id: 'diamond_pickaxe', name: 'Diamond Pickaxe', count: 1, maxStack: 1, isBlock: false,
-    toolProps: { type: ToolType.PICKAXE, efficiency: 3.5, tier: 4, swingSpeed: 0.16, durability: 1000, maxDurability: 1000 }
+    toolProps: { 
+      type: ToolType.PICKAXE, efficiency: 3.5, tier: 4, swingSpeed: 0.10, 
+      durability: 1000, maxDurability: 1000, swingType: 'arc', damage: 20, knockback: 5, attackRange: 60
+    }
   }),
   // ARMOR
   iron_helmet: (): InventoryItem => ({
@@ -200,7 +210,10 @@ export const CREATE_ITEM = {
       isWall: true,
       wallType: type
     }
-  }
+  },
+  chest: (): InventoryItem => ({
+      id: 'block_chest', name: 'Chest', count: 1, maxStack: 99, isBlock: true, blockType: BlockType.CHEST
+  })
 };
 
 export interface CraftingRecipe {
@@ -228,6 +241,12 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
     name: 'Wooden Bow',
     result: CREATE_ITEM.wooden_bow,
     ingredients: [{ id: `block_${BlockType.WOOD}`, count: 10 }]
+  },
+  {
+    id: 'recipe_chest',
+    name: 'Chest',
+    result: CREATE_ITEM.chest,
+    ingredients: [{ id: `block_${BlockType.WOOD}`, count: 8 }]
   },
   {
     id: 'recipe_iron_sword',

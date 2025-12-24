@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { InventoryItem } from '../types';
 import { ItemIcon } from './ItemIcon';
@@ -14,8 +13,10 @@ export const Hotbar: React.FC<HotbarProps> = ({ inventory, selectedIndex, onSele
   const slots = inventory.slice(0, 6);
 
   return (
-    <div className={`fixed left-1/2 transform -translate-x-1/2 bg-slate-950/80 p-2 sm:p-3 rounded-2xl sm:rounded-3xl flex items-center gap-2 sm:gap-3 border border-white/20 shadow-2xl backdrop-blur-3xl z-50 transition-all scale-105 sm:scale-100 pointer-events-auto ${isMobile ? 'top-16 sm:top-20' : 'bottom-12 sm:bottom-12'}`}>
-      <div className="hidden sm:flex items-center justify-center w-8 h-8 bg-white/5 rounded-lg border border-white/10 text-[10px] text-white/40 font-bold">LB</div>
+    <div className={`fixed left-1/2 transform -translate-x-1/2 bg-[#0b0e14]/90 p-2 sm:p-2.5 rounded-3xl flex items-center gap-2 sm:gap-3 border border-white/10 shadow-2xl backdrop-blur-xl z-50 transition-all duration-300 pointer-events-auto ${isMobile ? 'top-6 sm:top-6 scale-90 sm:scale-100' : 'bottom-8 sm:bottom-10'}`}>
+      
+      {/* PC Hint */}
+      <div className="hidden lg:flex items-center justify-center w-6 h-6 bg-white/5 rounded text-[10px] text-white/20 font-bold border border-white/5">Q</div>
       
       <div className="flex gap-2 sm:gap-3">
           {slots.map((item, index) => {
@@ -25,31 +26,33 @@ export const Hotbar: React.FC<HotbarProps> = ({ inventory, selectedIndex, onSele
                 key={index}
                 onClick={(e) => { e.stopPropagation(); onSelect(index); }}
                 className={`
-                  w-13 h-13 sm:w-16 sm:h-16 flex items-center justify-center rounded-xl transition-all duration-200 relative
+                  w-12 h-12 sm:w-14 sm:h-14 flex items-center justify-center rounded-2xl transition-all duration-200 relative group
                   ${isSelected 
-                    ? 'bg-white/25 ring-2 ring-yellow-400 z-10 animate-selected-pulse scale-110' 
-                    : 'bg-white/5 hover:bg-white/10 active:scale-95'
+                    ? 'bg-white/10 ring-2 ring-blue-500 ring-offset-2 ring-offset-black scale-110 z-10 shadow-lg shadow-blue-500/20' 
+                    : 'bg-white/5 hover:bg-white/10 active:scale-95 border border-white/5'
                   }
                 `}
               >
                 {item ? (
                     <>
-                        <ItemIcon item={item} size={48} />
+                        <div className="transform transition-transform group-hover:scale-110 duration-200">
+                             <ItemIcon item={item} size={36} />
+                        </div>
                         {item.count > 1 && (
-                            <span className="absolute bottom-1 right-2 text-[10px] sm:text-xs text-white font-black drop-shadow-[0_2px_2px_rgba(0,0,0,1)] z-20">
+                            <span className="absolute bottom-0.5 right-1.5 text-[9px] sm:text-[10px] text-white font-black drop-shadow-md bg-black/50 px-1 rounded">
                                 {item.count}
                             </span>
                         )}
                         {isSelected && (
-                            <div className={`absolute left-1/2 -translate-x-1/2 bg-slate-950 text-white text-[9px] px-3 py-1.5 rounded-lg whitespace-nowrap opacity-100 transition-opacity border border-white/20 font-bold tracking-tight shadow-2xl z-50 ${isMobile ? '-bottom-10' : '-top-16'}`}>
+                            <div className={`absolute left-1/2 -translate-x-1/2 bg-black/90 text-white text-[9px] px-3 py-1.5 rounded-lg whitespace-nowrap opacity-100 transition-opacity border border-white/10 font-bold tracking-tight shadow-xl z-50 ${isMobile ? 'top-[140%] animate-in slide-in-from-top-2' : 'bottom-[140%] animate-in slide-in-from-bottom-2'}`}>
                                 {item.name.toUpperCase()}
                             </div>
                         )}
                     </>
                 ) : (
-                    <div className="w-1.5 h-1.5 rounded-full bg-white/20" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-white/10 group-hover:bg-white/20 transition-colors" />
                 )}
-                <span className="absolute top-1 left-1.5 text-[8px] sm:text-[9px] text-white/30 font-mono font-bold">
+                <span className="absolute top-1 left-1.5 text-[8px] text-white/20 font-mono font-bold">
                     {index + 1}
                 </span>
               </button>
@@ -57,7 +60,7 @@ export const Hotbar: React.FC<HotbarProps> = ({ inventory, selectedIndex, onSele
           })}
       </div>
 
-      <div className="hidden sm:flex items-center justify-center w-8 h-8 bg-white/5 rounded-lg border border-white/10 text-[10px] text-white/40 font-bold">RB</div>
+      <div className="hidden lg:flex items-center justify-center w-6 h-6 bg-white/5 rounded text-[10px] text-white/20 font-bold border border-white/5">E</div>
     </div>
   );
 };

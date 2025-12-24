@@ -65,6 +65,7 @@ export enum BlockType {
   PINE_LEAVES = 20,
   WATER = 21,
   LAVA = 22,
+  CHEST = 23,
 }
 
 export enum WallType {
@@ -111,6 +112,7 @@ export interface ToolProps {
   durability?: number;
   maxDurability?: number;
   projectileSpeed?: number;
+  swingType?: 'arc' | 'stab' | 'shoot'; // New property for animation style
 }
 
 export interface InventoryItem {
@@ -165,6 +167,8 @@ export interface Entity {
   legsColor?: string;
   // For multiplayer aiming
   aimAngle?: number;
+  // Attack visual sync
+  isSwinging?: boolean;
 }
 
 export interface Projectile {
@@ -213,7 +217,8 @@ export type NetworkMessageType =
   | 'ENEMY_HIT'
   | 'CHAT'
   | 'TIME_SYNC'
-  | 'PROJECTILE_SPAWN';
+  | 'PROJECTILE_SPAWN'
+  | 'CONTAINER_UPDATE';
 
 export interface NetworkMessage {
   type: NetworkMessageType;

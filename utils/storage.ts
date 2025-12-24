@@ -1,4 +1,5 @@
 
+
 import { InventoryItem, Entity, BlockType } from '../types';
 import { WORLD_WIDTH, WORLD_HEIGHT } from '../constants';
 
@@ -9,7 +10,8 @@ export interface WorldSave {
   created: number;
   lastPlayed: number;
   worldData: string; // Base64 encoded Uint8Array
-  wallsData: string; // Base64 encoded Uint8Array (Added)
+  wallsData: string; // Base64 encoded Uint8Array
+  containers?: Record<string, (InventoryItem | null)[]>; // Added container storage
   player: {
     x: number;
     y: number;
@@ -58,7 +60,8 @@ export const saveWorld = (
     player: Entity, 
     inventory: (InventoryItem | null)[], 
     time: number, 
-    seed: number
+    seed: number,
+    containers?: Record<string, (InventoryItem | null)[]>
 ) => {
     const save: WorldSave = {
         id,
@@ -68,6 +71,7 @@ export const saveWorld = (
         lastPlayed: Date.now(),
         worldData: encodeArray(world),
         wallsData: encodeArray(walls),
+        containers,
         player: {
             x: player.x,
             y: player.y,
