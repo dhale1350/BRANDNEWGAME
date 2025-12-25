@@ -516,6 +516,10 @@ export const Game: React.FC<GameProps> = ({
   }, []);
 
   const checkCollision = useCallback((ent: Entity, axis: 'x' | 'y'): boolean => {
+    // AUTOMATIC HITBOX FIX
+    if (!ent.width || ent.width <= 0) ent.width = TILE_SIZE;
+    if (!ent.height || ent.height <= 0) ent.height = TILE_SIZE;
+
     if (ent.type === EntityType.PLAYER && devSettingsRef.current.noclip) return false;
     let collided = false;
     const startX = Math.floor(ent.x / TILE_SIZE), endX = Math.floor((ent.x + ent.width) / TILE_SIZE);
@@ -562,8 +566,8 @@ export const Game: React.FC<GameProps> = ({
       const stats = isEnemy ? ENEMY_STATS[type === EntityType.SLIME ? 'SLIME' : 'ZOMBIE'] : ENEMY_STATS.GUIDE;
       const id = (isEnemy ? 'enemy_' : 'npc_') + Math.random().toString(36).substr(2, 9);
       const entity: Entity = {
-        id, x, y, width: stats.width, height: stats.height, vx: 0, vy: 0, grounded: false, 
-        health: stats.hp, maxHealth: stats.hp, type, color: stats.color, iFrames: 0, jumpTimer: 0,
+        id, x, y, width: stats?.width || TILE_SIZE, height: stats?.height || TILE_SIZE, vx: 0, vy: 0, grounded: false, 
+        health: stats?.hp || 10, maxHealth: stats?.hp || 10, type, color: stats?.color || '#f00', iFrames: 0, jumpTimer: 0,
         name: type === EntityType.GUIDE ? 'Guide' : undefined,
         hairColor: type === EntityType.GUIDE ? '#8d5524' : undefined,
         skinColor: type === EntityType.GUIDE ? '#ffdbac' : undefined,
@@ -1082,7 +1086,7 @@ export const Game: React.FC<GameProps> = ({
         ctx.strokeRect(x - camX, y - camY, TILE_SIZE, TILE_SIZE); 
     }
 
-    const drawP = (p: Entity) => { const rx = Math.floor(p.x - camX); const ry = Math.floor(p.y - camY); const cx = rx + p.width / 2; const cy = ry + p.height; ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 3, 0, 0, Math.PI*2); ctx.fill(); const stretch = Math.max(0.85, Math.min(1.15, 1 + Math.abs(p.vy) * 0.02 * (p.grounded ? -1 : 1))); const squash = 1 / stretch; ctx.scale(squash, stretch); const facingDir = p.facing === 'right' ? 1 : -1; const lean = (Math.abs(p.vx) > 0.1) ? (p.vx * 0.05) : 0; ctx.rotate(lean); ctx.scale(facingDir, 1); const isMoving = Math.abs(p.vx) > 0.1; const animTime = p.animTimer || 0; const walkCycle = animTime * 0.8; const bob = isMoving ? Math.abs(Math.sin(walkCycle * 2)) * 2 : 0; const breath = !isMoving ? Math.sin(time / 200) * 1 : 0; let helmetItem, chestItem, legsItem; if (p.id === playerRef.current.id) { helmetItem = inventoryRef.current[30]; chestItem = inventoryRef.current[31]; legsItem = inventoryRef.current[32]; } const pantColor = p.type === EntityType.GUIDE ? '#1e3a8a' : '#1e293b'; const drawLeg = (isBack: boolean) => { ctx.save(); ctx.translate(isBack ? -2 : 2, -10); ctx.rotate(isMoving ? (isBack ? -1 : 1) * Math.sin(walkCycle) * 0.6 : 0); ctx.fillStyle = pantColor; ctx.fillRect(-3, 0, 6, 12); if (legsItem && legsItem.armorProps) { const ap = getToolPalette(legsItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-3, 6, 6, 6); ctx.fillStyle = ap.light; ctx.fillRect(-2, 7, 2, 4); ctx.fillStyle = ap.dark; ctx.fillRect(-3, 4, 6, 2); } ctx.restore(); }; drawLeg(true); ctx.save(); ctx.translate(0, -bob + breath); drawLeg(false); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-6, -22, 12, 12); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-6, -22, 12, 12); ctx.fillStyle = ap.dark; ctx.fillRect(-2, -22, 4, 12); ctx.fillStyle = ap.light; ctx.fillRect(-5, -20, 2, 4); ctx.fillRect(3, -20, 2, 4); ctx.fillStyle = ap.outline; ctx.fillRect(-6, -11, 12, 2); } else { ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-6, -12, 12, 2); } ctx.save(); ctx.translate(0, -22); ctx.rotate(-lean * 0.5 + (isMoving ? Math.sin(walkCycle * 2) * 0.05 : 0)); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-8, -16, 16, 16); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); if (!helmetItem) { ctx.fillStyle = p.hairColor || settingsRef.current.playerHair; ctx.fillRect(-9, -19, 18, 5); ctx.fillRect(-9, -19, 5, 14); ctx.fillRect(8, -14, 1, 4); } else if (helmetItem.armorProps) { const ap = getToolPalette(helmetItem.armorProps.tier); const isDiamond = helmetItem.armorProps.tier >= 4; ctx.fillStyle = ap.base; ctx.fillRect(-9, -19, 18, 14); ctx.fillRect(-9, -19, 18, 6); if (isDiamond) { ctx.fillStyle = ap.dark; ctx.fillRect(-5, -11, 10, 8); ctx.fillStyle = ap.base; ctx.fillRect(-1, -11, 2, 8); ctx.fillStyle = ap.light; ctx.fillRect(-11, -20, 2, 6); ctx.fillRect(9, -20, 2, 6); } else { ctx.clearRect(-4, -13, 8, 8); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-4, -13, 8, 8); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); ctx.fillStyle = ap.base; ctx.fillRect(-1, -13, 2, 4); } ctx.fillStyle = ap.light; ctx.fillRect(-6, -18, 4, 2); } if (p.name) { ctx.save(); ctx.scale(facingDir, 1); ctx.rotate(-lean + (lean*0.5)); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-p.name.length * 3 - 4, -40, p.name.length * 6 + 8, 14); ctx.fillStyle = 'white'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(p.name, 0, -30); ctx.restore(); } ctx.restore(); ctx.save(); ctx.translate(0, -18); const heldItem = p.id === playerRef.current.id ? inventoryRef.current[selectedSlotRef.current] : (p as any).heldItem; const isSwinging = (p.id === playerRef.current.id) ? miningRef.current.swing > 0 : (p as any).isSwinging; const isBow = heldItem?.toolProps?.type === ToolType.BOW; let armAngle = 0; let itemRotation = 0; if (isBow) { if (p.aimAngle !== undefined) { let aim = p.aimAngle; if (p.facing === 'left') aim = Math.PI - aim; armAngle = aim; } else { armAngle = 0; } } else if (isSwinging) { const sProgress = (p.id === playerRef.current.id) ? miningRef.current.swing : 0.5; const startAngle = -Math.PI * 0.8; const endAngle = Math.PI * 0.5; armAngle = startAngle + (endAngle - startAngle) * sProgress; itemRotation = armAngle + Math.PI/4; if (p.id === playerRef.current.id && sProgress > 0.1 && sProgress < 0.9) { ctx.save(); ctx.rotate(armAngle); ctx.translate(0, 10); ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 40, -0.5, 0.5); ctx.lineTo(0,0); const grd = ctx.createRadialGradient(0, 0, 10, 0, 0, 40); grd.addColorStop(0, 'rgba(255, 255, 255, 0)'); grd.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)'); grd.addColorStop(1, 'rgba(255, 255, 255, 0)'); ctx.fillStyle = grd; ctx.fill(); ctx.restore(); } } else { armAngle = isMoving ? -Math.sin(walkCycle) * 0.8 : 0.1; } ctx.rotate(armAngle); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-3, -2, 6, 8); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-4, -3, 8, 5); ctx.fillStyle = ap.outline; ctx.fillRect(-4, -3, 8, 1); } ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-2, 6, 4, 6); if (heldItem) { ctx.translate(0, 10); if (!isBow && !isSwinging) ctx.rotate(Math.PI / 2); if (heldItem.isBlock) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawBlock(ctx, 0, 0, heldItem.blockType as BlockType, 0, 0); ctx.restore(); } else if (heldItem.isWall) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawWall(ctx, 0, 0, heldItem.wallType as WallType, 0, 0); ctx.restore(); } else { const tier = heldItem.toolProps?.tier ?? 0; const type = heldItem.toolProps?.type as ToolType; let gripOffset = 0; if (type === ToolType.SWORD) gripOffset = -2.5; else if (type === ToolType.PICKAXE) gripOffset = -2.5; else if (type === ToolType.AXE) gripOffset = -2.5; else if (type === ToolType.SHOVEL) gripOffset = -1.5; const drawScale = 0.8; const pixelSize = 2 * drawScale; if (isSwinging && !isBow) { ctx.rotate(-Math.PI/2); } drawTool(ctx, type, tier, 0, gripOffset * pixelSize, drawScale); } } ctx.restore(); ctx.restore(); ctx.restore(); if (devSettingsRef.current.showHitboxes) { ctx.strokeStyle = '#f00'; ctx.lineWidth = 1; ctx.strokeRect(rx, ry, p.width, p.height); } };
+    const drawP = (p: Entity) => { const rx = Math.floor(p.x - camX); const ry = Math.floor(p.y - camY); const cx = rx + p.width / 2; const cy = ry + p.height; ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(0, 0, 10, 3, 0, 0, Math.PI*2); ctx.fill(); const stretch = Math.max(0.85, Math.min(1.15, 1 + Math.abs(p.vy) * 0.02 * (p.grounded ? -1 : 1))); const squash = 1 / stretch; ctx.scale(squash, stretch); const facingDir = p.facing === 'right' ? 1 : -1; const lean = (Math.abs(p.vx) > 0.1) ? (p.vx * 0.05) : 0; ctx.rotate(lean); ctx.scale(facingDir, 1); const isMoving = Math.abs(p.vx) > 0.1; const animTime = p.animTimer || 0; const walkCycle = animTime * 0.8; const bob = isMoving ? Math.abs(Math.sin(walkCycle * 2)) * 2 : 0; const breath = !isMoving ? Math.sin(time / 200) * 1 : 0; let helmetItem, chestItem, legsItem; if (p.id === playerRef.current.id) { helmetItem = inventoryRef.current[30]; chestItem = inventoryRef.current[31]; legsItem = inventoryRef.current[32]; } const pantColor = p.type === EntityType.GUIDE ? '#1e3a8a' : '#1e293b'; const drawLeg = (isBack: boolean) => { ctx.save(); ctx.translate(isBack ? -2 : 2, -10); ctx.rotate(isMoving ? (isBack ? -1 : 1) * Math.sin(walkCycle) * 0.6 : 0); ctx.fillStyle = pantColor; ctx.fillRect(-3, 0, 6, 12); if (legsItem && legsItem.armorProps) { const ap = getToolPalette(legsItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-3, 6, 6, 6); ctx.fillStyle = ap.light; ctx.fillRect(-2, 7, 2, 4); ctx.fillStyle = ap.dark; ctx.fillRect(-3, 4, 6, 2); } ctx.restore(); }; drawLeg(true); ctx.save(); ctx.translate(0, -bob + breath); drawLeg(false); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-6, -22, 12, 12); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-6, -22, 12, 12); ctx.fillStyle = ap.dark; ctx.fillRect(-2, -22, 4, 12); ctx.fillStyle = ap.light; ctx.fillRect(-5, -20, 2, 4); ctx.fillRect(3, -20, 2, 4); ctx.fillStyle = ap.outline; ctx.fillRect(-6, -11, 12, 2); } else { ctx.fillStyle = 'rgba(0,0,0,0.15)'; ctx.fillRect(-6, -12, 12, 2); } ctx.save(); ctx.translate(0, -22); ctx.rotate(-lean * 0.5 + (isMoving ? Math.sin(walkCycle * 2) * 0.05 : 0)); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-8, -16, 16, 16); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); if (!helmetItem) { ctx.fillStyle = p.hairColor || settingsRef.current.playerHair; ctx.fillRect(-9, -19, 18, 5); ctx.fillRect(-9, -19, 5, 14); ctx.fillRect(8, -14, 1, 4); } else if (helmetItem.armorProps) { const ap = getToolPalette(helmetItem.armorProps.tier); const isDiamond = helmetItem.armorProps.tier >= 4; ctx.fillStyle = ap.base; ctx.fillRect(-9, -19, 18, 14); ctx.fillRect(-9, -19, 18, 6); if (isDiamond) { ctx.fillStyle = ap.dark; ctx.fillRect(-5, -11, 10, 8); ctx.fillStyle = ap.base; ctx.fillRect(-1, -11, 2, 8); ctx.fillStyle = ap.light; ctx.fillRect(-11, -20, 2, 6); ctx.fillRect(9, -20, 2, 6); } else { ctx.clearRect(-4, -13, 8, 8); ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-4, -13, 8, 8); ctx.fillStyle = '#111'; ctx.fillRect(2, -9, 2, 2); ctx.fillRect(-4, -9, 2, 2); ctx.fillStyle = ap.base; ctx.fillRect(-1, -13, 2, 4); } ctx.fillStyle = ap.light; ctx.fillRect(-6, -18, 4, 2); } if (p.name) { ctx.save(); ctx.scale(facingDir, 1); ctx.rotate(-lean + (lean*0.5)); ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(-p.name.length * 3 - 4, -40, p.name.length * 6 + 8, 14); ctx.fillStyle = 'white'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.fillText(p.name, 0, -30); ctx.restore(); } ctx.restore(); ctx.save(); ctx.translate(0, -18); const heldItem = p.id === playerRef.current.id ? inventoryRef.current[selectedSlotRef.current] : (p as any).heldItem; const isSwinging = (p.id === playerRef.current.id) ? miningRef.current.swing > 0 : (p as any).isSwinging; const isBow = heldItem?.toolProps?.type === ToolType.BOW; let armAngle = 0; let itemRotation = 0; if (isBow) { if (p.aimAngle !== undefined) { let aim = p.aimAngle; if (p.facing === 'left') aim = Math.PI - aim; armAngle = aim; } else { armAngle = 0; } } else if (isSwinging) { const sProgress = (p.id === playerRef.current.id) ? miningRef.current.swing : 0.5; const startAngle = -Math.PI * 0.8; const endAngle = Math.PI * 0.5; armAngle = startAngle + (endAngle - startAngle) * sProgress; itemRotation = armAngle + Math.PI/4; if (p.id === playerRef.current.id && sProgress > 0.1 && sProgress < 0.9) { ctx.save(); ctx.rotate(armAngle); ctx.translate(0, 10); ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 40, -0.5, 0.5); ctx.lineTo(0,0); const grd = ctx.createRadialGradient(0, 0, 10, 0, 0, 40); grd.addColorStop(0, 'rgba(255, 255, 255, 0)'); grd.addColorStop(0.8, 'rgba(255, 255, 255, 0.6)'); grd.addColorStop(1, 'rgba(255, 255, 255, 0)'); ctx.fillStyle = grd; ctx.fill(); ctx.restore(); } } else { armAngle = isMoving ? -Math.sin(walkCycle) * 0.8 : 0.1; } ctx.rotate(armAngle); ctx.fillStyle = p.color || settingsRef.current.playerColor; ctx.fillRect(-3, -2, 6, 8); if (chestItem && chestItem.armorProps) { const ap = getToolPalette(chestItem.armorProps.tier); ctx.fillStyle = ap.base; ctx.fillRect(-4, -3, 8, 5); ctx.fillStyle = ap.outline; ctx.fillRect(-4, -3, 8, 1); } ctx.fillStyle = p.skinColor || '#ffdbac'; ctx.fillRect(-2, 6, 4, 6); if (heldItem) { ctx.translate(0, 10); if (!isBow && !isSwinging) ctx.rotate(Math.PI / 2); if (heldItem.isBlock) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawBlock(ctx, 0, 0, heldItem.blockType as BlockType, 0, 0); ctx.restore(); } else if (heldItem.isWall) { const size = 10; const scale = size/TILE_SIZE; ctx.save(); ctx.translate(-size/2, -size/2); ctx.scale(scale, scale); drawWall(ctx, 0, 0, heldItem.wallType as WallType, 0, 0); ctx.restore(); } else { const tier = heldItem.toolProps?.tier ?? 0; const type = heldItem.toolProps?.type as ToolType; let gripOffset = 0; if (type === ToolType.SWORD) gripOffset = -2.5; else if (type === ToolType.PICKAXE) gripOffset = -2.5; else if (type === ToolType.AXE) gripOffset = -2.5; else if (type === ToolType.SHOVEL) gripOffset = -1.5; const drawScale = 0.8; const pixelSize = 2 * drawScale; if (isSwinging && !isBow) { ctx.rotate(-Math.PI/2); } drawTool(ctx, type, tier, 0, gripOffset * pixelSize, drawScale); } } ctx.restore(); ctx.restore(); ctx.restore(); };
     const drawE = (e: Entity) => {
         if (e.isDead) return; const rx = Math.floor(e.x - camX); const ry = Math.floor(e.y - camY); ctx.save(); ctx.translate(rx + e.width/2, ry + e.height);
         if (e.iFrames && e.iFrames > 0) { ctx.scale(1.1 - Math.sin(time/20)*0.1, 0.9 + Math.sin(time/20)*0.1); ctx.filter = 'brightness(200%) sepia(100%) hue-rotate(-50deg) saturate(600%)'; }
@@ -1095,252 +1099,466 @@ export const Game: React.FC<GameProps> = ({
     remotePlayersRef.current.forEach(drawP); npcsRef.current.forEach(drawP); enemiesRef.current.forEach(drawE); drawP(playerRef.current);
     projectilesRef.current.forEach(p => { const px = p.x - camX; const py = p.y - camY; ctx.save(); ctx.translate(px, py); ctx.rotate(p.angle); ctx.fillStyle = '#8d6e63'; ctx.fillRect(-6, -1, 12, 2); ctx.fillStyle = '#fff'; ctx.fillRect(4, -1, 2, 2); ctx.fillStyle = '#ccc'; ctx.fillRect(-6, -2, 3, 4); ctx.restore(); });
 
-    if (devSettingsRef.current.debugInfo) { const { x, y } = inputRef.current.mouse; const wx = Math.floor((x / zoom + camX) / TILE_SIZE); const wy = Math.floor((y / zoom + camY) / TILE_SIZE); ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x / zoom + 10, y / zoom + 10, 140, 65); ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 1; ctx.strokeRect(x / zoom + 10, y / zoom + 10, 140, 65); ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; let blockName = 'VOID'; let lightVal = 0; if (wx >= 0 && wx < WORLD_WIDTH && wy >= 0 && wy < WORLD_HEIGHT) { const b = worldRef.current[wy * WORLD_WIDTH + wx]; const w = wallsRef.current[wy * WORLD_WIDTH + wx]; blockName = b !== BlockType.AIR ? BlockType[b] : (w !== WallType.AIR ? `WALL:${WallType[w]}` : 'AIR'); lightVal = lightRef.current[wy * WORLD_WIDTH + wx] || 0; } const lines = [ `X,Y: ${wx}, ${wy}`, `TILE: ${blockName}`, `LIGHT: ${(lightVal * 100).toFixed(0)}%`, `CAM: ${camX}, ${camY}`, `FPS: ${Math.round(1000/delta)}` ]; lines.forEach((l, i) => { ctx.fillText(l, x / zoom + 18, y / zoom + 25 + (i * 12)); }); ctx.strokeStyle = '#ffff00'; ctx.lineWidth = 2; ctx.strokeRect(wx * TILE_SIZE - camX, wy * TILE_SIZE - camY, TILE_SIZE, TILE_SIZE); }
-    const remainingParticles: Particle[] = []; const maxParticles = settingsRef.current.performanceMode ? 50 : 250; for (let i = 0; i < Math.min(particlesRef.current.length, maxParticles); i++) { const part = particlesRef.current[i]; part.x += part.vx; part.y += part.vy; part.vy += 0.45; part.life++; if (part.life < part.maxLife) { ctx.fillStyle = part.color; ctx.globalAlpha = 1 - part.life/part.maxLife; ctx.fillRect(part.x - camX, part.y - camY, part.size, part.size); remainingParticles.push(part); } } particlesRef.current = remainingParticles; ctx.globalAlpha = 1; ctx.restore(); requestRef.current = requestAnimationFrame(renderLoop);
-  };
+    // AUTOMATIC HITBOX DEBUG SYSTEM
+    if (devSettingsRef.current.showHitboxes) {
+        const drawDebugBox = (e: any, color: string) => {
+            // Auto-fix dimensions if missing (Self-healing)
+            if (!e.width || e.width <= 0) e.width = TILE_SIZE; 
+            if (!e.height || e.height <= 0) e.height = TILE_SIZE;
+            
+            const rx = Math.floor(e.x - camX);
+            const ry = Math.floor(e.y - camY);
+            
+            ctx.save();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
+            ctx.strokeRect(rx, ry, e.width, e.height);
+            
+            // Center point and velocity vector
+            ctx.fillStyle = color;
+            ctx.fillRect(rx + e.width/2 - 1, ry + e.height/2 - 1, 2, 2);
+            
+            if (e.vx || e.vy) {
+                ctx.beginPath();
+                ctx.moveTo(rx + e.width/2, ry + e.height/2);
+                ctx.lineTo(rx + e.width/2 + (e.vx||0) * 10, ry + e.height/2 + (e.vy||0) * 10);
+                ctx.strokeStyle = '#0f0';
+                ctx.stroke();
+            }
+            
+            ctx.restore();
+        };
 
-  useEffect(() => { if (isLoaded) requestRef.current = requestAnimationFrame(renderLoop); return () => { if (requestRef.current) cancelAnimationFrame(requestRef.current); }; }, [isLoaded]);
+        drawDebugBox(playerRef.current, '#ef4444');
+        remotePlayersRef.current.forEach(p => drawDebugBox(p, '#d946ef'));
+        npcsRef.current.forEach(n => drawDebugBox(n, '#06b6d4'));
+        enemiesRef.current.forEach(e => drawDebugBox(e, '#f97316'));
+        projectilesRef.current.forEach(p => drawDebugBox(p, '#eab308'));
+    }
 
-  const handleCopyId = () => { const id = roomId || myAssignedId; if (id) { navigator.clipboard.writeText(id); setCopiedId(true); setTimeout(() => setCopiedId(false), 2000); } };
-  const testInterface: TestInterface = useMemo(() => ({ playerRef, worldRef, wallsRef, inputRef, enemiesRef, inventoryRef, spawnEntity: spawnEntityAtLocation, setHealth: (hp: number) => { playerRef.current.health = hp; setPlayerHealth(hp); }, teleport: (x: number, y: number) => { playerRef.current.x = x; playerRef.current.y = y; playerRef.current.vx = 0; playerRef.current.vy = 0; }, setInventory: (items: (InventoryItem | null)[]) => { inventoryRef.current = items; setInventoryState([...items]); }, addItem: addItemToInventory, refreshWorld: (minX: number, maxX: number) => updateLighting(minX, maxX) }), [spawnEntityAtLocation, addItemToInventory, updateLighting]);
-
-  useEffect(() => { if (roomId && !isLoaded) { const timer = setTimeout(() => { setLoadingError("Connection timed out. Host may be offline."); }, 15000); return () => clearTimeout(timer); } }, [roomId, isLoaded]);
-  useEffect(() => { if (isInitializingRef.current) return; isInitializingRef.current = true; const requestedId = roomId ? undefined : hostPeerId; let peer: any = null; try { peer = new (window as any).Peer(requestedId, { debug: 1, config: { iceServers: [ { urls: 'stun:stun1.l.google.com:19302' }, { urls: 'stun:stun2.l.google.com:19302' }, { urls: 'stun:stun3.l.google.com:19302' }, { urls: 'stun:stun4.l.google.com:19302' } ], iceTransportPolicy: 'all' } }); peerRef.current = peer; } catch (e) { setLoadingError("Network Init Failed"); isInitializingRef.current = false; return; } peer.on('error', (err: any) => { console.warn('PeerJS Error:', err); if (err.type === 'peer-unavailable') { setLoadingError(`Session "${roomId}" not found.`); } else { setLoadingError(`Network Error: ${err.type || 'Unknown'}`); } isInitializingRef.current = false; }); peer.on('open', (id: string) => { setMyAssignedId(id); playerRef.current.id = id; if (!roomId) finishLoading(); else setTimeout(() => { if (peerRef.current && !peerRef.current.destroyed) setupConnection(peerRef.current.connect(roomId, { reliable: true })); }, 800); isInitializingRef.current = false; }); peer.on('connection', setupConnection); return () => { broadcast('PLAYER_LEAVE', {}); if (peerRef.current) { try { peerRef.current.destroy(); } catch(e) {} } isInitializingRef.current = false; }; }, [roomId, hostPeerId, setupConnection, broadcast, finishLoading]); 
-
-  // Fix: Improved pointer input handling with coordinate scaling support
-  const handlePointer = (e: React.PointerEvent<HTMLDivElement> | React.MouseEvent<HTMLDivElement>, type: 'down' | 'move' | 'up') => {
-      // If Gamepad was active, moving mouse disables it immediately
-      if (inputRef.current.isGamepadActive && type === 'move') {
-          inputRef.current.isGamepadActive = false;
-      }
-
-      if (effectiveIsMobile && type !== 'up') {
-          // Touch logic handled in overlay mainly, but fallback here
-          if ('isPrimary' in e && e.isPrimary) {
-               inputRef.current.mouse.leftDown = type === 'down';
-               const rect = containerRef.current?.getBoundingClientRect();
-               const canvas = canvasRef.current;
-               if(rect && canvas) { 
-                   const scaleX = canvas.width / rect.width;
-                   const scaleY = canvas.height / rect.height;
-                   inputRef.current.mouse.x = (e.clientX - rect.left) * scaleX; 
-                   inputRef.current.mouse.y = (e.clientY - rect.top) * scaleY; 
-               }
-          }
-      } else {
-          // PC logic
-          if ('button' in e && e.button === 2) inputRef.current.mouse.rightDown = type === 'down';
-          if ('button' in e && e.button === 0) inputRef.current.mouse.leftDown = type === 'down';
-          
-          if (type === 'move' || type === 'down') {
-             const rect = containerRef.current?.getBoundingClientRect();
-             const canvas = canvasRef.current;
-             if(rect && canvas) { 
-                 const scaleX = canvas.width / rect.width;
-                 const scaleY = canvas.height / rect.height;
-                 inputRef.current.mouse.x = (e.clientX - rect.left) * scaleX; 
-                 inputRef.current.mouse.y = (e.clientY - rect.top) * scaleY; 
+    if (devSettingsRef.current.debugInfo) { const { x, y } = inputRef.current.mouse; const wx = Math.floor((x / zoom + camX) / TILE_SIZE); const wy = Math.floor((y / zoom + camY) / TILE_SIZE); ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(x / zoom + 10, y / zoom + 10, 140, 65); ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 1; ctx.strokeRect(x / zoom + 10, y / zoom + 10, 140, 65); ctx.fillStyle = '#fff'; ctx.font = '10px monospace'; ctx.textAlign = 'left'; let blockName = 'VOID'; let lightVal = 0; if (wx >= 0 && wx < WORLD_WIDTH && wy >= 0 && wy < WORLD_HEIGHT) { const b = worldRef.current[wy * WORLD_WIDTH + wx]; const w = wallsRef.current[wy * WORLD_WIDTH + wx]; blockName = b !== BlockType.AIR ? BlockType[b] : (w !== WallType.AIR ? WallType[w] : 'AIR'); const l = lightRef.current[wy * WORLD_WIDTH + wx]; if (l !== undefined) lightVal = l; } ctx.fillText(`BLOCK: ${blockName}`, x / zoom + 15, y / zoom + 25); ctx.fillText(`POS: ${wx}, ${wy}`, x / zoom + 15, y / zoom + 35); ctx.fillText(`LIGHT: ${lightVal.toFixed(2)}`, x / zoom + 15, y / zoom + 45); const fps = Math.round(1000 / delta); ctx.fillText(`FPS: ${fps}`, x / zoom + 15, y / zoom + 55); ctx.fillText(`ENT: ${enemiesRef.current.size + npcsRef.current.size + remotePlayersRef.current.size + 1}`, x / zoom + 15, y / zoom + 65); }
+    
+    // Particles
+    for (let i = particlesRef.current.length - 1; i >= 0; i--) {
+        const p = particlesRef.current[i];
+        p.life -= dt * 0.05;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += GRAVITY * 0.5 * dt;
+        p.rotation = (p.rotation || 0) + (p.rv || 0);
+        
+        if (p.y > WORLD_HEIGHT * TILE_SIZE) p.life = 0;
+        else {
+             const tx = Math.floor(p.x / TILE_SIZE);
+             const ty = Math.floor(p.y / TILE_SIZE);
+             if (tx >= 0 && tx < WORLD_WIDTH && ty >= 0 && ty < WORLD_HEIGHT && worldRef.current[ty * WORLD_WIDTH + tx] !== BlockType.AIR) {
+                 p.vx *= 0.5; p.vy *= -0.5;
              }
-          }
-      }
+        }
+
+        if (p.life <= 0) {
+            particlesRef.current.splice(i, 1);
+        } else {
+            const px = p.x - camX;
+            const py = p.y - camY;
+            ctx.save();
+            ctx.translate(px, py);
+            ctx.rotate(p.rotation || 0);
+            ctx.globalAlpha = Math.min(1, p.life);
+            ctx.fillStyle = p.color;
+            ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            ctx.restore();
+        }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore(); // Restore context from camera transform
+
+    requestRef.current = requestAnimationFrame(renderLoop);
   };
 
-  if (!isLoaded) return ( <div className="w-full h-screen flex flex-col items-center justify-center bg-[#05080f] text-white"> {loadingError ? ( <div className="flex flex-col items-center gap-4 animate-in fade-in slide-in-from-bottom-4"> <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mb-2"> <XCircle size={32} className="text-red-500" /> </div> <div className="text-center max-w-md px-6"> <h3 className="text-xl font-black mb-2">CONNECTION FAILED</h3> <p className="text-zinc-400 mb-6 font-mono text-xs">{loadingError}</p> <button onClick={onExit} className="bg-white text-black px-6 py-3 rounded-xl font-bold uppercase tracking-widest hover:bg-zinc-200 transition-colors shadow-lg active:scale-95"> Return to Menu </button> </div> </div> ) : ( <> <Loader2 className="animate-spin mb-4 text-blue-500" size={32} /> <span className="font-bold tracking-widest animate-pulse text-xs text-zinc-400">{roomId ? 'JOINING SECURE FREQUENCY...' : 'GENERATING TERRAIN...'}</span> {roomId && <button onClick={onExit} className="mt-12 text-[10px] font-bold text-zinc-600 hover:text-red-400 border-b border-transparent hover:border-red-400/50 transition-all uppercase tracking-widest">Cancel Connection</button>} </> )} </div> );
+  useEffect(() => {
+      requestRef.current = requestAnimationFrame(renderLoop);
+      return () => {
+          if (requestRef.current) cancelAnimationFrame(requestRef.current);
+      };
+  }, [renderLoop]); // Added dependency to be safe, though renderLoop depends on refs
+
+  // Re-adding the PeerJS init effect if it was lost or not present.
+  useEffect(() => {
+      if (isInitializingRef.current || peerRef.current) return;
+      isInitializingRef.current = true;
+      
+      import('peerjs').then(({ Peer }) => {
+          const peer = new Peer(hostPeerId);
+          peerRef.current = peer;
+          
+          peer.on('open', (id) => {
+              setMyAssignedId(id);
+              if (roomId) {
+                  const conn = peer.connect(roomId);
+                  setupConnection(conn);
+              }
+          });
+
+          peer.on('connection', (conn) => {
+             setupConnection(conn);
+          });
+          
+          peer.on('error', (err) => {
+              console.error(err);
+              if (err.type === 'peer-unavailable') {
+                  setLoadingError(`Game ID ${roomId} not found.`);
+              }
+          });
+      });
+      
+      return () => {
+          if (peerRef.current) peerRef.current.destroy();
+      };
+  }, [roomId, hostPeerId, setupConnection]);
+
+  // Initial Load Effect
+  useEffect(() => {
+      if (!roomId) {
+          // Local game
+          finishLoading();
+      }
+  }, [roomId, finishLoading]);
+
+  // Chat/Input focus handling
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Enter') {
+              if (isChatOpenRef.current) {
+                  if (chatInputValue) {
+                      sendChat(chatInputValue);
+                      setChatInputValue('');
+                  }
+                  setIsChatOpen(false);
+              } else {
+                  setIsChatOpen(true);
+                  setTimeout(() => chatInputRef.current?.focus(), 10);
+              }
+          }
+          if (e.key === 'Escape') {
+              if (showInventoryRef.current) setShowInventory(false);
+              else if (isChatOpenRef.current) setIsChatOpen(false);
+              else setShowSettings(true);
+          }
+          
+          // Hotbar keys
+          if (!isChatOpenRef.current && /^[1-6]$/.test(e.key)) {
+              setSelectedSlotState(parseInt(e.key) - 1);
+          }
+          if (e.key === 'e' && !isChatOpenRef.current) {
+              setShowInventory(prev => !prev);
+          }
+          if (e.key === 'q' && !isChatOpenRef.current) {
+             setSelectedSlotState(prev => (prev - 1 + 6) % 6);
+          }
+          if (e.key === 'm' && !isChatOpenRef.current) {
+             setShowFullMap(prev => !prev);
+          }
+          
+          // Input state
+          if (!isChatOpenRef.current) {
+               if (e.key === 'a' || e.key === 'ArrowLeft') inputRef.current.left = true;
+               if (e.key === 'd' || e.key === 'ArrowRight') inputRef.current.right = true;
+               if (e.key === 'w' || e.key === 'ArrowUp') inputRef.current.up = true;
+               if (e.key === 's' || e.key === 'ArrowDown') inputRef.current.down = true;
+               if (e.key === ' ' || e.key === 'ArrowUp') inputRef.current.jump = true;
+          }
+      };
+      
+      const handleKeyUp = (e: KeyboardEvent) => {
+           if (e.key === 'a' || e.key === 'ArrowLeft') inputRef.current.left = false;
+           if (e.key === 'd' || e.key === 'ArrowRight') inputRef.current.right = false;
+           if (e.key === 'w' || e.key === 'ArrowUp') inputRef.current.up = false;
+           if (e.key === 's' || e.key === 'ArrowDown') inputRef.current.down = false;
+           if (e.key === ' ' || e.key === 'ArrowUp') inputRef.current.jump = false;
+      };
+      
+      const handleMouseDown = (e: MouseEvent) => {
+          if (isChatOpenRef.current || showInventoryRef.current) return;
+          if (e.button === 0) inputRef.current.mouse.leftDown = true;
+          if (e.button === 2) inputRef.current.mouse.rightDown = true;
+      };
+      
+      const handleMouseUp = (e: MouseEvent) => {
+          if (e.button === 0) inputRef.current.mouse.leftDown = false;
+          if (e.button === 2) inputRef.current.mouse.rightDown = false;
+      };
+
+      const handleMouseMove = (e: MouseEvent) => {
+           inputRef.current.mouse.x = e.clientX;
+           inputRef.current.mouse.y = e.clientY;
+      };
+      
+      const handleWheel = (e: WheelEvent) => {
+          const dir = Math.sign(e.deltaY);
+          setSelectedSlotState(prev => (prev + dir + 6) % 6);
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+      window.addEventListener('mousedown', handleMouseDown);
+      window.addEventListener('mouseup', handleMouseUp);
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('wheel', handleWheel);
+      
+      return () => {
+          window.removeEventListener('keydown', handleKeyDown);
+          window.removeEventListener('keyup', handleKeyUp);
+          window.removeEventListener('mousedown', handleMouseDown);
+          window.removeEventListener('mouseup', handleMouseUp);
+          window.removeEventListener('mousemove', handleMouseMove);
+          window.removeEventListener('wheel', handleWheel);
+      };
+  }, [sendChat, chatInputValue]);
+
+  const testInterface: TestInterface = {
+      playerRef, worldRef, wallsRef, inputRef, enemiesRef, inventoryRef,
+      spawnEntity: spawnEntityAtLocation,
+      setHealth: setPlayerHealth,
+      teleport: (x,y) => { playerRef.current.x = x; playerRef.current.y = y; },
+      setInventory: (items) => { inventoryRef.current = items; setInventoryState([...items]); },
+      addItem: addItemToInventory,
+      refreshWorld: updateLighting
+  };
+
+  if (loadingError) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-red-400 gap-4">
+             <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl max-w-md text-center">
+                 <h2 className="text-xl font-bold mb-2">Connection Error</h2>
+                 <p>{loadingError}</p>
+             </div>
+             <button onClick={onExit} className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-white">Back to Menu</button>
+        </div>
+      );
+  }
+
+  if (!isLoaded) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full gap-4 text-white">
+            <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+            <div className="text-sm font-bold uppercase tracking-widest text-zinc-500">
+                {roomId ? 'Syncing World State...' : 'Generating Terrain...'}
+            </div>
+        </div>
+      );
+  }
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden touch-none select-none bg-[#0b0e14]" onContextMenu={(e) => e.preventDefault()} 
-        onPointerDown={(e) => handlePointer(e, 'down')}
-        onPointerMove={(e) => handlePointer(e, 'move')}
-        onPointerUp={(e) => handlePointer(e, 'up')}
-        onPointerCancel={(e) => handlePointer(e, 'up')}
-    >
-      <canvas ref={canvasRef} className="block w-full h-full touch-none" />
+    <div className="relative w-full h-full bg-[#0b0e14] overflow-hidden cursor-crosshair font-sans">
+      <canvas ref={canvasRef} className="block w-full h-full" />
       
-      {/* HUD HEADER */}
-      <div className="fixed top-0 left-0 right-0 p-4 sm:p-6 flex items-start justify-between pointer-events-none z-50 pt-[max(env(safe-area-inset-top),16px)]">
-        <div className="flex items-center gap-3 pointer-events-auto">
-          <button onClick={onExit} className="w-10 h-10 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 flex items-center justify-center backdrop-blur-md transition-all active:scale-90 shadow-lg"><ArrowLeft size={18} /></button>
-          <button onClick={() => setShowSettings(true)} className="w-10 h-10 bg-black/40 border border-white/10 rounded-full text-white hover:bg-white/10 flex items-center justify-center backdrop-blur-md transition-all active:scale-90 shadow-lg"><SettingsIcon size={18} /></button>
+      {/* UI Layer */}
+      <div className="absolute inset-0 pointer-events-none">
           
-          <div className="hidden sm:flex bg-black/40 pl-3 pr-4 py-1.5 rounded-full border border-white/10 backdrop-blur-md items-center gap-3 shadow-lg">
-            <div className={`w-2 h-2 rounded-full ${isDisconnected ? 'bg-red-500' : 'bg-emerald-500'} animate-pulse`} />
-             <div className="flex flex-col">
-                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-tight leading-none">
-                     {activePeersCount} {activePeersCount === 1 ? 'Player' : 'Players'}
-                </span>
+          {/* Top Bar */}
+          <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start">
+             <div className="flex flex-col gap-2 pointer-events-auto">
+                 <HealthDisplay current={playerHealth} max={PLAYER_MAX_HEALTH} />
+                 
+                 {/* Room Info */}
+                 {isHost && !roomId && (
+                     <div className="flex items-center gap-2">
+                         <button 
+                            onClick={() => {
+                                const url = `${window.location.origin}?join=${hostPeerId}`; // Simplified
+                                navigator.clipboard.writeText(hostPeerId);
+                                setCopiedId(true);
+                                setTimeout(() => setCopiedId(false), 2000);
+                            }}
+                            className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 flex items-center gap-2 hover:bg-white/10 transition-colors"
+                         >
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase">Session ID</span>
+                            <span className="text-xs font-mono font-bold text-blue-400">{hostPeerId}</span>
+                            {copiedId ? <Check size={12} className="text-green-500"/> : <Copy size={12} className="text-zinc-500"/>}
+                         </button>
+                         {saveStatus && (
+                             <div className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 flex items-center gap-1 animate-pulse">
+                                 <Save size={10} /> {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
+                             </div>
+                         )}
+                     </div>
+                 )}
+                 {roomId && (
+                     <div className="bg-indigo-500/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-indigo-500/20 flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-indigo-300 uppercase">Connected</span>
+                        <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
+                     </div>
+                 )}
              </div>
-             <div className="w-px h-4 bg-white/10"></div>
-             <div className="flex items-center gap-1.5">
-                {worldTime > 5000 && worldTime < 19000 ? <Sun size={12} className="text-yellow-400" /> : <Moon size={12} className="text-blue-400" />}
-                <span className="text-xs text-white font-bold font-mono">{Math.floor(worldTime/1000).toString().padStart(2, '0')}:00</span>
+
+             <div className="flex items-center gap-2 pointer-events-auto">
+                  <Minimap 
+                    world={worldRef.current} 
+                    player={playerRef.current} 
+                    others={remotePlayersRef.current} 
+                    isOpen={showFullMap} 
+                    onToggle={() => setShowFullMap(!showFullMap)} 
+                    isFullMap={false}
+                  />
+                  <button onClick={() => setShowSettings(true)} className="w-10 h-10 bg-black/40 backdrop-blur-md rounded-xl border border-white/10 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-white/10 transition-all">
+                      <SettingsIcon size={20} />
+                  </button>
              </div>
           </div>
-          
-          {myAssignedId && (
-             <div className="hidden lg:flex bg-black/40 pl-3 pr-2 py-1.5 rounded-full border border-white/10 backdrop-blur-md items-center gap-2 pointer-events-auto shadow-lg">
-                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">ID:</span>
-                <span className="text-xs text-white font-mono font-bold">{roomId || myAssignedId}</span>
-                <button onClick={handleCopyId} className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/20 text-white transition-all active:scale-95 ml-1">
-                    {copiedId ? <Check size={12} className="text-emerald-400"/> : <Copy size={12} />}
-                </button>
-             </div>
-          )}
-          
-          {isDevUser && (
-            <button onClick={() => setShowDevTools(prev => !prev)} className="bg-amber-500/20 px-3 py-2 rounded-full border border-amber-500/50 backdrop-blur-md flex items-center gap-2 hover:bg-amber-500/30 transition-all pointer-events-auto active:scale-95"><Terminal size={14} className="text-amber-400" /><span className="text-[10px] text-amber-400 font-black uppercase tracking-widest leading-none">DEV</span></button>
-          )}
-        </div>
-        
-        <HealthDisplay current={playerHealth} max={PLAYER_MAX_HEALTH} />
-      </div>
 
-      {/* CHAT */}
-      <div className={`fixed left-4 bottom-24 w-72 sm:w-80 flex flex-col justify-end pointer-events-none z-50 transition-all duration-300 ${effectiveIsMobile ? 'bottom-36' : 'bottom-24'}`}>
-        <div ref={chatMessagesRef} className="flex flex-col gap-1 max-h-48 overflow-y-auto no-scrollbar pointer-events-auto pb-2 mask-linear-fade">
-            {chatMessages.map((msg) => {
-                const opacity = isChatOpen ? 1 : Math.max(0, 1 - (Date.now() - msg.time) / 10000);
-                if (opacity <= 0) return null;
-                return (
-                    <div key={msg.id} style={{ opacity }} className="text-xs sm:text-sm font-medium drop-shadow-md transition-opacity duration-500 bg-black/20 backdrop-blur-sm self-start px-2 py-1 rounded-lg border border-white/5 mb-1">
-                        <span style={{ color: msg.color }} className="font-bold mr-1.5 shadow-black">{msg.author}:</span>
-                        <span className="text-white/90">{msg.text}</span>
-                    </div>
-                );
-            })}
-        </div>
-        {isChatOpen && (
-            <div className="pointer-events-auto flex items-center gap-2 bg-black/80 backdrop-blur-xl rounded-xl p-2 border border-white/10 animate-in slide-in-from-left-4 fade-in shadow-2xl">
-                <input 
+          {/* Chat Overlay */}
+          <div className={`absolute bottom-24 left-4 w-80 max-h-60 flex flex-col gap-2 transition-all duration-300 ${isChatOpen ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+              <div ref={chatMessagesRef} className="flex-1 overflow-y-auto custom-scrollbar space-y-1 p-2 bg-black/60 rounded-xl border border-white/5 backdrop-blur-md">
+                  {chatMessages.map(msg => (
+                      <div key={msg.id} className="text-xs">
+                          <span style={{ color: msg.color }} className="font-bold">{msg.author}:</span> <span className="text-white/90">{msg.text}</span>
+                      </div>
+                  ))}
+                  {chatMessages.length === 0 && <div className="text-white/30 text-[10px] italic">No messages yet.</div>}
+              </div>
+              <div className="flex gap-2 pointer-events-auto">
+                  <input 
                     ref={chatInputRef}
                     type="text" 
-                    value={chatInputValue} 
+                    value={chatInputValue}
                     onChange={e => setChatInputValue(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { if(chatInputValue.trim()) sendChat(chatInputValue.trim()); setChatInputValue(''); setIsChatOpen(false); } }}
-                    maxLength={100}
-                    placeholder="Message..."
-                    className="flex-1 bg-transparent text-white text-sm outline-none placeholder:text-zinc-600 font-medium px-2"
-                    autoFocus
-                />
-                <button onClick={() => { if(chatInputValue.trim()) sendChat(chatInputValue.trim()); setChatInputValue(''); setIsChatOpen(false); }} className="w-8 h-8 flex items-center justify-center bg-blue-600 rounded-lg text-white shadow-lg active:scale-90 transition-all">
-                    <Send size={14} />
-                </button>
-            </div>
-        )}
+                    placeholder="Type a message..."
+                    className="flex-1 bg-black/60 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder:text-zinc-500 outline-none focus:border-blue-500/50 backdrop-blur-md"
+                  />
+                  <button onClick={() => { if(chatInputValue) { sendChat(chatInputValue); setChatInputValue(''); setIsChatOpen(false); } }} className="px-3 bg-blue-600 rounded-lg text-white hover:bg-blue-500">
+                      <Send size={14} />
+                  </button>
+              </div>
+          </div>
+          
+          {/* Mobile Controls */}
+          {effectiveIsMobile && (
+              <MobileControls 
+                onMove={(v) => { inputRef.current.moveX = v.x; inputRef.current.moveY = v.y; }}
+                onAim={(v, a) => { mobileAimRef.current = { ...v, active: a }; }}
+                onJumpStart={() => inputRef.current.jump = true}
+                onJumpEnd={() => inputRef.current.jump = false}
+                onInventoryToggle={() => setShowInventory(!showInventory)}
+                actionMode={mobileActionMode}
+                onToggleActionMode={() => setMobileActionMode(prev => prev === 'mine' ? 'place' : 'mine')}
+                onChatToggle={() => setIsChatOpen(!isChatOpen)}
+              />
+          )}
+
+          {/* Hotbar */}
+          <Hotbar 
+            inventory={inventoryState} 
+            selectedIndex={selectedSlot} 
+            onSelect={setSelectedSlotState} 
+            isMobile={effectiveIsMobile}
+          />
+
+          {/* Modals */}
+          <Inventory 
+             isOpen={showInventory} 
+             inventory={inventoryState}
+             onClose={() => setShowInventory(false)}
+             onSwap={(from, to) => {
+                 const inv = [...inventoryRef.current];
+                 const temp = inv[from];
+                 inv[from] = inv[to];
+                 inv[to] = temp;
+                 inventoryRef.current = inv;
+                 setInventoryState(inv);
+             }}
+             addItem={addItemToInventory}
+             onUpdateSlot={(i, item) => {
+                 const inv = [...inventoryRef.current];
+                 inv[i] = item;
+                 inventoryRef.current = inv;
+                 setInventoryState(inv);
+             }}
+             externalInventory={openContainer?.items}
+             onUpdateExternalSlot={(i, item) => {
+                 if (openContainer) {
+                     const newItems = [...openContainer.items];
+                     newItems[i] = item;
+                     setOpenContainer({ ...openContainer, items: newItems });
+                     containersRef.current.set(`${openContainer.x},${openContainer.y}`, newItems);
+                     broadcast('CONTAINER_UPDATE', { x: openContainer.x, y: openContainer.y, items: newItems });
+                 }
+             }}
+             onTransfer={(fromIndex, fromLoc, toIndex, toLoc) => {
+                 // Logic for transferring between player and container
+                 // Simplified for now, just direct swap or move if empty
+                 if (fromLoc === toLoc) return; // Handled by swap
+                 
+                 const pInv = [...inventoryRef.current];
+                 const cInv = openContainer ? [...openContainer.items] : [];
+                 
+                 if (!openContainer) return;
+
+                 const sourceItem = fromLoc === 'player' ? pInv[fromIndex] : cInv[fromIndex];
+                 const targetItem = toLoc === 'player' ? pInv[toIndex] : cInv[toIndex];
+                 
+                 // Perform swap
+                 if (fromLoc === 'player') {
+                     pInv[fromIndex] = targetItem;
+                     cInv[toIndex] = sourceItem;
+                 } else {
+                     cInv[fromIndex] = targetItem;
+                     pInv[toIndex] = sourceItem;
+                 }
+                 
+                 inventoryRef.current = pInv;
+                 setInventoryState(pInv);
+                 
+                 setOpenContainer({ ...openContainer, items: cInv });
+                 containersRef.current.set(`${openContainer.x},${openContainer.y}`, cInv);
+                 broadcast('CONTAINER_UPDATE', { x: openContainer.x, y: openContainer.y, items: cInv });
+             }}
+          />
+
+          <SettingsOverlay 
+            isOpen={showSettings} 
+            onClose={() => setShowSettings(false)} 
+            inputMode={inputMode}
+            onInputModeChange={onInputModeChange}
+            settings={settings}
+            onSettingsChange={onSettingsChange}
+            onExit={onExit}
+            isIngame={true}
+            onJoinGame={(id) => { onJoinGame(id); setShowSettings(false); }}
+            onSaveGame={() => handleSaveGame(false)}
+          />
+
+          <Minimap 
+            world={worldRef.current} 
+            player={playerRef.current} 
+            others={remotePlayersRef.current} 
+            isOpen={showFullMap} 
+            onToggle={() => setShowFullMap(!showFullMap)} 
+            isFullMap={true}
+          />
+          
+          {(isDevUser || showDevTools) && (
+              <DevTools 
+                  isOpen={true} // Always open if active
+                  onClose={() => setShowDevTools(false)}
+                  settings={devSettings}
+                  onUpdateSettings={setDevSettings}
+                  onSpawnEntity={(t, c) => spawnEntityAtLocation(t, playerRef.current.x, playerRef.current.y)}
+                  onGiveItem={addItemToInventory}
+                  onTeleport={(x, y) => { playerRef.current.x = x; playerRef.current.y = y; playerRef.current.vx=0; playerRef.current.vy=0; }}
+                  onClearEnemies={() => { enemiesRef.current.clear(); broadcast('ENEMY_SYNC', { enemies: [] }); }}
+                  onSetTime={(t) => { worldTimeRef.current = t; setWorldTime(t); broadcast('TIME_SYNC', { time: t }); }}
+                  onClearInventory={() => { inventoryRef.current.fill(null); setInventoryState([...inventoryRef.current]); }}
+                  playerPos={{ x: Math.floor(playerRef.current.x/TILE_SIZE), y: Math.floor(playerRef.current.y/TILE_SIZE) }}
+                  entityCount={enemiesRef.current.size + npcsRef.current.size + remotePlayersRef.current.size}
+                  testInterface={testInterface}
+                  remotePlayers={remotePlayersList}
+                  roomId={roomId || undefined}
+                  onJoinGame={onJoinGame}
+              />
+          )}
+
       </div>
-
-      {/* DIALOGUE */}
-      {activeDialogue && (
-          <div className="fixed bottom-32 sm:bottom-40 left-1/2 -translate-x-1/2 bg-black/90 border border-white/10 p-5 rounded-3xl shadow-2xl backdrop-blur-xl z-[70] w-[90vw] max-w-md animate-in slide-in-from-bottom-8 fade-in duration-300 pointer-events-auto flex gap-5 items-start">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-400 shrink-0 border border-blue-500/20">
-                  <MessageCircle size={24} />
-              </div>
-              <div className="flex-1">
-                  <div className="text-xs font-black uppercase text-blue-400 mb-1.5 tracking-widest">{activeDialogue.speaker}</div>
-                  <p className="text-sm font-medium text-zinc-100 leading-relaxed">"{activeDialogue.text}"</p>
-                  <button onClick={() => setActiveDialogue(null)} className="mt-3 text-[10px] bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-lg text-zinc-400 uppercase font-bold tracking-wide transition-colors w-full sm:w-auto">Dismiss</button>
-              </div>
-          </div>
-      )}
-
-      <Minimap 
-          world={worldRef.current} 
-          player={playerRef.current} 
-          others={remotePlayersRef.current} 
-          isOpen={true} 
-          onToggle={() => setShowFullMap(prev => !prev)}
-          isFullMap={showFullMap}
-      />
-
-      <Hotbar inventory={inventoryState} selectedIndex={selectedSlot} onSelect={setSelectedSlotState} isMobile={effectiveIsMobile} />
-      
-      <Inventory 
-          isOpen={showInventory} 
-          inventory={inventoryState}
-          externalInventory={openContainer ? openContainer.items : undefined}
-          onUpdateExternalSlot={(index, item) => {
-              if (openContainer) {
-                  const newItems = [...openContainer.items];
-                  newItems[index] = item;
-                  setOpenContainer({ ...openContainer, items: newItems });
-                  const key = `${openContainer.x},${openContainer.y}`;
-                  containersRef.current.set(key, newItems);
-                  broadcast('CONTAINER_UPDATE', { x: openContainer.x, y: openContainer.y, items: newItems });
-              }
-          }}
-          onTransfer={(fromIndex, fromLoc, toIndex, toLoc) => {
-              const inv = [...inventoryRef.current];
-              const ext = openContainer ? [...openContainer.items] : [];
-              
-              const sourceList = fromLoc === 'player' ? inv : ext;
-              const destList = toLoc === 'player' ? inv : ext;
-              
-              const sourceItem = sourceList[fromIndex];
-              const destItem = destList[toIndex];
-              
-              sourceList[fromIndex] = destItem;
-              destList[toIndex] = sourceItem;
-              
-              inventoryRef.current = inv;
-              setInventoryState([...inv]);
-              
-              if (openContainer) {
-                  const key = `${openContainer.x},${openContainer.y}`;
-                  containersRef.current.set(key, ext);
-                  setOpenContainer({ ...openContainer, items: ext });
-                  broadcast('CONTAINER_UPDATE', { x: openContainer.x, y: openContainer.y, items: ext });
-              }
-          }}
-          onSwap={(a, b) => { 
-              const inv = inventoryRef.current;
-              const isValid = (idx: number, item: InventoryItem | null) => { 
-                  if (!item) return true; 
-                  if (idx === 30) return item.armorProps?.type === ArmorType.HELMET; 
-                  if (idx === 31) return item.armorProps?.type === ArmorType.CHESTPLATE; 
-                  if (idx === 32) return item.armorProps?.type === ArmorType.LEGGINGS; 
-                  if (idx >= 33 && idx <= 35) return !!item.accessoryProps;
-                  return true; 
-              };
-              if ((a >= 30 && !isValid(a, inv[b])) || (b >= 30 && !isValid(b, inv[a]))) return; 
-              const tmp = inv[a]; inv[a] = inv[b]; inv[b] = tmp; setInventoryState([...inv]); 
-          }} 
-          onClose={() => setShowInventory(false)} 
-          addItem={addItemToInventory} 
-          onUpdateSlot={(index, item) => { inventoryRef.current[index] = item; setInventoryState([...inventoryRef.current]); }}
-          nearbyStations={getNearbyStations()}
-      />
-      
-      <DevTools 
-          isOpen={isDevUser && showDevTools} onClose={() => setShowDevTools(false)} settings={devSettings} onUpdateSettings={setDevSettings} 
-          onSpawnEntity={(type, count) => { if (isHost) { const wx = playerRef.current.x + (playerRef.current.facing === 'right' ? 100 : -100); for(let i=0; i<count; i++) spawnEntityAtLocation(type, wx + i*10, playerRef.current.y - 100); } }} 
-          onGiveItem={(item) => addItemToInventory(item)} onTeleport={(x, y) => { playerRef.current.x = x; playerRef.current.y = y; playerRef.current.vx = 0; playerRef.current.vy = 0; }} 
-          onClearEnemies={() => { if (isHost) enemiesRef.current.clear(); }} onSetTime={(t) => { worldTimeRef.current = t; setWorldTime(t); }} onClearInventory={() => { inventoryRef.current.fill(null); setInventoryState([...inventoryRef.current]); }} 
-          playerPos={{ x: Math.floor(playerRef.current.x / TILE_SIZE), y: Math.floor(playerRef.current.y / TILE_SIZE) }} entityCount={enemiesRef.current.size} testInterface={testInterface} remotePlayers={remotePlayersList} roomId={roomId || myAssignedId || 'SINGLEPLAYER'} onJoinGame={onJoinGame}
-      />
-      
-      <SettingsOverlay 
-        isOpen={showSettings} onClose={() => setShowSettings(false)} inputMode={inputMode} onInputModeChange={onInputModeChange} settings={settings} onSettingsChange={onSettingsChange} onExit={onExit} isIngame onJoinGame={onJoinGame} onSaveGame={() => handleSaveGame()}
-      />
-      
-      {effectiveIsMobile && !showInventory && !showSettings && !showFullMap && (
-        <MobileControls 
-            actionMode={mobileActionMode} 
-            onToggleActionMode={() => setMobileActionMode(prev => prev === 'mine' ? 'place' : 'mine')} 
-            onMove={(v) => { inputRef.current.moveX = v.x; inputRef.current.moveY = v.y; if (Math.abs(v.y) > 0.5) { inputRef.current.down = v.y > 0; } else { inputRef.current.down = false; } }} 
-            onAim={(v, active) => { mobileAimRef.current = { x: v.x, y: v.y, active }; }}
-            onJumpStart={() => { inputRef.current.jump = true; }} 
-            onJumpEnd={() => { inputRef.current.jump = false; }} 
-            onInventoryToggle={() => setShowInventory(prev => !prev)} 
-            onChatToggle={() => setIsChatOpen(prev => !prev)}
-        />
-      )}
-
-      {saveStatus && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-black/80 border border-emerald-500/20 px-4 py-2 rounded-full backdrop-blur-xl flex items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-300 z-[60] shadow-2xl">
-              {saveStatus === 'saving' ? ( <Loader2 size={14} className="animate-spin text-emerald-400" /> ) : ( <Check size={14} className="text-emerald-400" /> )}
-              <span className="font-bold text-emerald-100 text-[10px] uppercase tracking-widest">{saveStatus === 'saving' ? 'Saving...' : 'Saved'}</span>
-          </div>
-      )}
     </div>
   );
 };
-
